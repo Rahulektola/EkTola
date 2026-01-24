@@ -5,8 +5,8 @@
 
 ## 🎯 What You Need to Build the PWA
 
-Your frontend developer needs these files and documentation to build the Progressive Web App without waiting for the full backend implementation.
-
+You are a frontend developer needs these files and documentation to build the Progressive Web App without waiting for the full backend implementation.
+this is an edit . 
 ---
 
 ## 📦 Files to Share

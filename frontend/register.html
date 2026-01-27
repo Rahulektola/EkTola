@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="ekTola - WhatsApp Campaign Management for Jewellers">
+  <meta name="theme-color" content="#6366f1">
+  
+  <!-- PWA Meta Tags -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ekTola">
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  
+  <title>Jeweller Registration - ekTola</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Registration Card -->
+    <div class="auth-card">
+      <!-- Logo/Header -->
+      <div class="auth-header">
+        <h1 class="app-title">ekTola</h1>
+        <p class="app-subtitle">WhatsApp Campaign Management</p>
+        <div class="user-type-badge jeweller">Jeweller Registration</div>
+      </div>
+
+      <!-- Registration Form -->
+      <form id="registerForm" class="auth-form active">
+        <div class="form-group">
+          <label for="businessName" class="form-label">Business Name</label>
+          <input 
+            type="text" 
+            id="businessName" 
+            name="businessName" 
+            class="form-input" 
+            placeholder="Enter your business name"
+            required
+            autocomplete="organization"
+          >
+          <span class="form-error" id="businessNameError"></span>
+        </div>
+
+        <div class="form-group">
+          <label for="phoneNumber" class="form-label">Phone Number</label>
+          <input 
+            type="tel" 
+            id="phoneNumber" 
+            name="phoneNumber" 
+            class="form-input" 
+            placeholder="Enter your phone number"
+            required
+            autocomplete="tel"
+          >
+          <span class="form-error" id="phoneNumberError"></span>
+        </div>
+
+        <div class="form-group">
+          <label for="registerEmail" class="form-label">Email</label>
+          <input 
+            type="email" 
+            id="registerEmail" 
+            name="registerEmail" 
+            class="form-input" 
+            placeholder="Enter your email"
+            required
+            autocomplete="email"
+          >
+          <span class="form-error" id="registerEmailError"></span>
+        </div>
+
+        <div class="form-group">
+          <label for="registerPassword" class="form-label">Password</label>
+          <div class="password-input-wrapper">
+            <input 
+              type="password" 
+              id="registerPassword" 
+              name="registerPassword" 
+              class="form-input" 
+              placeholder="Create a password"
+              required
+              autocomplete="new-password"
+            >
+            <button 
+              type="button" 
+              class="password-toggle" 
+              id="registerPasswordToggle"
+              aria-label="Toggle password visibility"
+            >
+              <svg class="icon" id="registerEyeIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            </button>
+          </div>
+          <span class="form-error" id="registerPasswordError"></span>
+        </div>
+
+        <div class="form-group">
+          <label for="confirmPassword" class="form-label">Confirm Password</label>
+          <div class="password-input-wrapper">
+            <input 
+              type="password" 
+              id="confirmPassword" 
+              name="confirmPassword" 
+              class="form-input" 
+              placeholder="Confirm your password"
+              required
+              autocomplete="new-password"
+            >
+            <button 
+              type="button" 
+              class="password-toggle" 
+              id="confirmPasswordToggle"
+              aria-label="Toggle password visibility"
+            >
+              <svg class="icon" id="confirmEyeIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            </button>
+          </div>
+          <span class="form-error" id="confirmPasswordError"></span>
+        </div>
+
+        <div class="info-message">
+          <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+          <span>Your account will be pending admin approval after registration.</span>
+        </div>
+
+        <div class="form-error-message" id="registerFormError"></div>
+
+        <button type="submit" class="btn btn-primary" id="registerButton">
+          <span class="btn-text">Create Account</span>
+          <span class="btn-loader" id="registerLoader"></span>
+        </button>
+      </form>
+
+      <!-- Footer -->
+      <div class="auth-footer">
+        <p>Already have an account? <a href="/index.html" class="link-text">Sign in</a></p>
+        <p class="switch-login-type">Are you an admin? <a href="/admin-register.html" class="link-text">Register as Admin</a></p>
+      </div>
+    </div>
+
+    <!-- Success Message (Hidden by default) -->
+    <div class="success-message" id="successMessage">
+      <svg class="icon success-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+      </svg>
+      <p id="successMessageText">Registration successful!</p>
+    </div>
+  </div>
+
+  <!-- Offline Indicator -->
+  <div class="offline-indicator" id="offlineIndicator">
+    <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="1" y1="1" x2="23" y2="23"></line>
+      <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"></path>
+      <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"></path>
+      <path d="M10.71 5.05A16 16 0 0 1 22.58 9"></path>
+      <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"></path>
+      <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+      <line x1="12" y1="20" x2="12.01" y2="20"></line>
+    </svg>
+    <span>You are offline</span>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/js/auth.js"></script>
+  <script src="/js/register.js"></script>
+  <script>
+    // Register service worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js')
+          .then(registration => console.log('ServiceWorker registered'))
+          .catch(err => console.log('ServiceWorker registration failed:', err));
+      });
+    }
+
+    // Check online/offline status
+    function updateOnlineStatus() {
+      const offlineIndicator = document.getElementById('offlineIndicator');
+      if (!navigator.onLine) {
+        offlineIndicator.classList.add('visible');
+      } else {
+        offlineIndicator.classList.remove('visible');
+      }
+    }
+
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    updateOnlineStatus();
+  </script>
+</body>
+</html>

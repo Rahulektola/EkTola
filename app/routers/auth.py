@@ -170,6 +170,48 @@ def verify_otp(
     return Token(access_token=access_token, refresh_token=refresh_token)
 
 
+@router.post("/refresh", response_model=Token)
+def refresh_access_token(
+    request: dict,
+    db: Session = Depends(get_db)
+):
+    """
+    Refresh access token using refresh token
+    Request body: {"refresh_token": "..."}
+    """
+    refresh_token = request.get("refresh_token")
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Refresh token is required"
+        )
+    
+    payload = decode_token(refresh_token)
+    if payload is None or payload.get("type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token"
+        )
+    
+    user_id = payload.get("user_id")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or inactive"
+        )
+    
+    # Get jeweller if exists
+    jeweller = db.query(Jeweller).filter(Jeweller.user_id == user.id).first()
+    
+    # Generate new tokens
+    token_data = create_token_data(user, jeweller)
+    access_token = create_access_token(token_data)
+    new_refresh_token = create_refresh_token(token_data)
+    
+    return Token(access_token=access_token, refresh_token=new_refresh_token)
+
+
 @router.get("/me", response_model=UserResponse)
 def get_current_user_profile(current_user: User = Depends(get_current_user)):
     """Get current user profile"""

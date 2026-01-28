@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, Integer, ForeignKey, Text, Index
+from sqlalchemy import Column, String, DateTime, Integer, ForeignKey, Text, Boolean, Index
 from datetime import datetime
 from app.database import Base
 
@@ -18,7 +18,7 @@ class WebhookEvent(Base):
     payload = Column(Text, nullable=False)  # JSON payload from WhatsApp
     
     # Processing status
-    processed = Column(String, default=False)
+    processed = Column(Boolean, default=False)
     processed_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
     

@@ -4,8 +4,13 @@ from app.routers import auth, contacts, campaigns, templates, analytics, webhook
 from app.database import engine, Base
 from app.config import settings
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+# Create database tables (only if database is available)
+try:
+    Base.metadata.create_all(bind=engine)
+    print("✅ Database tables created successfully")
+except Exception as e:
+    print(f"⚠️ Database connection failed: {e}")
+    print("⚠️ App will run but database endpoints won't work")
 
 # Initialize FastAPI app
 app = FastAPI(

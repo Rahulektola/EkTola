@@ -72,3 +72,11 @@ class JewellerResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+class AdminRegisterRequest(BaseModel):
+    """Admin registration with access code"""
+    email: EmailStr
+    password: str
+    full_name: str
+    access_code: str

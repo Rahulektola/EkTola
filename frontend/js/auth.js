@@ -96,7 +96,7 @@ class AuthService {
    */
   async requestOTP(email) {
     try {
-      const response = await fetch(`${this.baseURL}/auth/request-otp`, {
+      const response = await fetch(`${this.baseURL}/auth/otp/request`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -118,17 +118,17 @@ class AuthService {
   /**
    * Verify OTP and login
    * @param {string} email - User email
-   * @param {string} otp - OTP code
+   * @param {string} otp_code - OTP code
    * @returns {Promise<Object>} Token response
    */
-  async verifyOTP(email, otp) {
+  async verifyOTP(email, otp_code) {
     try {
-      const response = await fetch(`${this.baseURL}/auth/verify-otp`, {
+      const response = await fetch(`${this.baseURL}/auth/otp/verify`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, otp }),
+        body: JSON.stringify({ email, otp_code }),
       });
 
       if (!response.ok) {

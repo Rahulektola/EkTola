@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     # Environment
     ENVIRONMENT: str = "development"
     
+    #Admin access code
+    ADMIN_ACCESS_CODE: str = ""
+
+    
     class Config:
         env_file = ".env"
         case_sensitive = True

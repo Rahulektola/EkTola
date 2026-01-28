@@ -1,8 +1,8 @@
-from sqlalchemy import Column, String, DateTime, Integer, Text, Boolean, Enum as SQLEnum
+from sqlalchemy import Column, String, DateTime, Integer, Text, Boolean, ForeignKey, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.database import Base
-from app.utils.enums import CampaignType, SegmentType
+from app.utils.enums import CampaignType, Language, SegmentType
 
 
 class Template(Base):

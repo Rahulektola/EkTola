@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.schemas.auth import (
-    LoginRequest, OTPLoginRequest, OTPVerifyRequest, RegisterRequest,
+    AdminRegisterRequest, LoginRequest, OTPLoginRequest, OTPVerifyRequest, RegisterRequest,
     Token, UserResponse, JewellerResponse
 )
+from app.config import settings
 from app.models.user import User
 from app.models.jeweller import Jeweller
 from app.core.security import verify_password, get_password_hash, create_access_token, create_refresh_token
@@ -58,6 +59,51 @@ def register_jeweller(
     
     # Generate tokens
     token_data = create_token_data(new_user, new_jeweller)
+    access_token = create_access_token(token_data)
+    refresh_token = create_refresh_token(token_data)
+    
+    return Token(access_token=access_token, refresh_token=refresh_token)
+
+
+
+@router.post("/register-admin", response_model=Token, status_code=status.HTTP_201_CREATED)
+def register_admin(
+    request: AdminRegisterRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Register a new admin account
+    Requires valid access code
+    """
+    # Verify access code
+    if request.access_code != settings.ADMIN_ACCESS_CODE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid access code"
+        )
+    
+    # Check if user exists
+    existing_user = db.query(User).filter(User.email == request.email).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+    
+    # Create admin user
+    hashed_password = get_password_hash(request.password)
+    new_user = User(
+        email=request.email,
+        hashed_password=hashed_password,
+        is_admin=True,
+        is_active=True
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    # Generate tokens
+    token_data = create_token_data(new_user, None)
     access_token = create_access_token(token_data)
     refresh_token = create_refresh_token(token_data)
     
@@ -189,3 +235,4 @@ def get_current_jeweller_profile(
             detail="Jeweller profile not found"
         )
     return jeweller
+

@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import List, Dict
 from datetime import datetime
+from typing import Optional
 from app.schemas.campaign import CampaignStatsResponse
 from app.schemas.message import MessageStatsResponse, FailureBreakdown
 from app.schemas.contact import ContactSegmentStats

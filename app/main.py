@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import auth, contacts, campaigns, templates, analytics, webhooks
+from app.routers import auth, contacts, campaigns, templates, analytics, webhooks, admin_panel
 from app.database import engine, Base
 from app.config import settings
 
@@ -33,6 +33,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth.router)
+app.include_router(admin_panel.router)
 app.include_router(contacts.router)
 app.include_router(campaigns.router)
 app.include_router(templates.router)

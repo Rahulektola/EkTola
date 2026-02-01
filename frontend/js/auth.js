@@ -31,7 +31,7 @@ class AuthService {
   }
 
   /**
-   * Login with email and password
+   * Login with email and password (Admin)
    * @param {string} email - User email
    * @param {string} password - User password
    * @returns {Promise<Object>} Token response
@@ -44,6 +44,36 @@ class AuthService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ email, password }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Login failed');
+      }
+
+      const data = await response.json();
+      this.storeTokens(data.access_token, data.refresh_token);
+      
+      return data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Login with phone number and password (Jeweller)
+   * @param {string} phoneNumber - User phone number
+   * @param {string} password - User password
+   * @returns {Promise<Object>} Token response
+   */
+  async loginWithPhone(phoneNumber, password) {
+    try {
+      const response = await fetch(`${this.baseURL}/auth/login/phone`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ phone_number: phoneNumber, password }),
       });
 
       if (!response.ok) {
@@ -90,7 +120,7 @@ class AuthService {
   }
 
   /**
-   * Request OTP for email
+   * Request OTP for email (Admin)
    * @param {string} email - User email
    * @returns {Promise<Object>} Response message
    */
@@ -116,7 +146,33 @@ class AuthService {
   }
 
   /**
-   * Verify OTP and login
+   * Request OTP via WhatsApp (Jeweller)
+   * @param {string} phoneNumber - User phone number
+   * @returns {Promise<Object>} Response message
+   */
+  async requestPhoneOTP(phoneNumber) {
+    try {
+      const response = await fetch(`${this.baseURL}/auth/otp/request/phone`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ phone_number: phoneNumber }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'OTP request failed');
+      }
+
+      return await response.json();
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Verify OTP and login (Email - Admin)
    * @param {string} email - User email
    * @param {string} otp_code - OTP code
    * @returns {Promise<Object>} Token response
@@ -129,6 +185,36 @@ class AuthService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ email, otp_code }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'OTP verification failed');
+      }
+
+      const data = await response.json();
+      this.storeTokens(data.access_token, data.refresh_token);
+      
+      return data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Verify WhatsApp OTP and login (Jeweller)
+   * @param {string} phoneNumber - User phone number
+   * @param {string} otp_code - OTP code
+   * @returns {Promise<Object>} Token response
+   */
+  async verifyPhoneOTP(phoneNumber, otp_code) {
+    try {
+      const response = await fetch(`${this.baseURL}/auth/otp/verify/phone`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ phone_number: phoneNumber, otp_code }),
       });
 
       if (!response.ok) {

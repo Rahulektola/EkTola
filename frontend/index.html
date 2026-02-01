@@ -40,17 +40,17 @@
       <!-- Password Login Form -->
       <form id="passwordLoginForm" class="auth-form tab-content active" data-content="password">
         <div class="form-group">
-          <label for="email" class="form-label">Email</label>
+          <label for="phoneNumber" class="form-label">Mobile Number</label>
           <input 
-            type="email" 
-            id="email" 
-            name="email" 
+            type="tel" 
+            id="phoneNumber" 
+            name="phoneNumber" 
             class="form-input" 
-            placeholder="Enter your email"
+            placeholder="+91 9876543210"
             required
-            autocomplete="email"
+            autocomplete="tel"
           >
-          <span class="form-error" id="emailError"></span>
+          <span class="form-error" id="phoneError"></span>
         </div>
 
         <div class="form-group">
@@ -100,31 +100,31 @@
       <div class="auth-form tab-content" data-content="otp">
         <form id="otpRequestForm" class="otp-step active">
           <div class="form-group">
-            <label for="otpEmail" class="form-label">Email</label>
+            <label for="otpPhone" class="form-label">WhatsApp Number</label>
             <input 
-              type="email" 
-              id="otpEmail" 
-              name="otpEmail" 
+              type="tel" 
+              id="otpPhone" 
+              name="otpPhone" 
               class="form-input" 
-              placeholder="Enter your email"
+              placeholder="+91 9876543210"
               required
-              autocomplete="email"
+              autocomplete="tel"
             >
-            <span class="form-error" id="otpEmailError"></span>
+            <span class="form-error" id="otpPhoneError"></span>
           </div>
 
           <div class="form-error-message" id="otpRequestError"></div>
 
           <button type="submit" class="btn btn-primary" id="requestOtpButton">
-            <span class="btn-text">Send OTP</span>
+            <span class="btn-text">Send OTP to WhatsApp</span>
             <span class="btn-loader" id="otpRequestLoader"></span>
           </button>
         </form>
 
         <form id="otpVerifyForm" class="otp-step">
           <div class="otp-info">
-            <p>Enter the 6-digit code sent to <strong id="otpEmailDisplay"></strong></p>
-            <button type="button" class="link-text" id="changeEmailButton">Change email</button>
+            <p>Enter the 6-digit code sent to <strong id="otpPhoneDisplay"></strong></p>
+            <button type="button" class="link-text" id="changePhoneButton">Change number</button>
           </div>
 
           <div class="form-group">

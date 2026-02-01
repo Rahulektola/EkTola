@@ -32,7 +32,6 @@ def create_campaign(
     # Create campaign
     new_campaign = Campaign(
         jeweller_id=current_jeweller.id,
-        created_by_user_id=current_jeweller.user_id,
         timezone=current_jeweller.timezone,
         **request.model_dump()
     )

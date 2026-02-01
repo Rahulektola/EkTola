@@ -29,7 +29,9 @@ from app.models.webhook import WebhookEvent
 config = context.config
 
 # Override sqlalchemy.url from environment variable
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Use raw string to avoid ConfigParser interpolation issues with % character
+database_url = settings.DATABASE_URL.replace('%', '%%')
+config.set_main_option("sqlalchemy.url", database_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

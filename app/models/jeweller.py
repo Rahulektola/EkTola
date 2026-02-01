@@ -52,7 +52,6 @@ class Jeweller(Base):
     contacts = relationship("Contact", back_populates="jeweller", cascade="all, delete-orphan")
     campaigns = relationship("Campaign", back_populates="jeweller", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="jeweller", cascade="all, delete-orphan")
-    templates = relationship("Template", back_populates="jeweller", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Jeweller {self.business_name} ({self.phone_number})>"

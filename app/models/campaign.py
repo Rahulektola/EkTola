@@ -34,9 +34,6 @@ class Campaign(Base):
     # Template variables mapping (JSON)
     variable_mapping = Column(Text, nullable=True)  # {"customer_name": "{{name}}", "amount": "{{loan_amount}}"}
     
-    # Metadata
-    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -47,7 +44,7 @@ class Campaign(Base):
     campaign_runs = relationship("CampaignRun", back_populates="campaign", cascade="all, delete-orphan")
     
     __table_args__ = (
-        Index('idx_jeweller_status', 'jeweller_id', 'status'),
+        Index('idx_campaign_jeweller_status', 'jeweller_id', 'status'),
         Index('idx_jeweller_type', 'jeweller_id', 'campaign_type'),
     )
 

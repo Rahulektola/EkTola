@@ -23,18 +23,18 @@ class TokenData(BaseModel):
 
 class OTPRequest(BaseModel):
     """Request OTP for jeweller"""
-    phone_number: str = Field(..., regex=r"^\+?[1-9]\d{1,14}$", description="Phone number in international format")
+    phone_number: str = Field(..., pattern=r"^\+?[1-9]\d{1,14}$", description="Phone number in international format")
 
 
 class OTPVerify(BaseModel):
     """Verify OTP"""
-    phone_number: str = Field(..., regex=r"^\+?[1-9]\d{1,14}$")
+    phone_number: str = Field(..., pattern=r"^\+?[1-9]\d{1,14}$")
     otp_code: str = Field(..., min_length=6, max_length=6, description="6-digit OTP code")
 
 
 class JewellerSignup(BaseModel):
     """Jeweller registration with phone verification"""
-    phone_number: str = Field(..., regex=r"^\+?[1-9]\d{1,14}$")
+    phone_number: str = Field(..., pattern=r"^\+?[1-9]\d{1,14}$")
     otp_code: str = Field(..., min_length=6, max_length=6, description="OTP received on WhatsApp")
     business_name: str = Field(..., min_length=2, max_length=200)
     owner_name: str = Field(..., min_length=2, max_length=100)
@@ -56,7 +56,7 @@ class CreateAdminRequest(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=100)
     email: EmailStr
     password: str = Field(..., min_length=8)
-    phone_number: Optional[str] = Field(None, regex=r"^\+?[1-9]\d{1,14}$")
+    phone_number: Optional[str] = Field(None, pattern=r"^\+?[1-9]\d{1,14}$")
 
 
 # ============ Response Schemas ============

@@ -42,11 +42,12 @@ class Message(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
     # Relationships
+    jeweller = relationship("Jeweller", back_populates="messages")
     contact = relationship("Contact", back_populates="messages")
     campaign_run = relationship("CampaignRun", back_populates="messages")
     
     __table_args__ = (
-        Index('idx_jeweller_status', 'jeweller_id', 'status'),
+        Index('idx_message_jeweller_status', 'jeweller_id', 'status'),
         Index('idx_campaign_status', 'campaign_run_id', 'status'),
         Index('idx_status_queued', 'status', 'queued_at'),
     )

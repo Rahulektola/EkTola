@@ -1,10 +1,15 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
+from urllib.parse import quote_plus
 
 
 class Settings(BaseSettings):
-    # Database
-    DATABASE_URL: str
+    # Database - individual components
+    DB_USER: str
+    DB_PASSWORD: str
+    DB_HOST: str = "localhost"
+    DB_PORT: int = 5432
+    DB_NAME: str
     
     # Security
     SECRET_KEY: str
@@ -25,6 +30,13 @@ class Settings(BaseSettings):
     
     # Environment
     ENVIRONMENT: str = "development"
+    
+    @property
+    def DATABASE_URL(self) -> str:
+        """Construct DATABASE_URL from individual components with URL encoding"""
+        # URL-encode password to handle special characters like @, #, etc.
+        encoded_password = quote_plus(self.DB_PASSWORD)
+        return f"postgresql://{self.DB_USER}:{encoded_password}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
     
     class Config:
         env_file = ".env"

@@ -8,13 +8,13 @@ const authService = new AuthService();
 
 // DOM Elements
 let passwordLoginForm, otpRequestForm, otpVerifyForm;
-let emailInput, passwordInput, passwordToggle, loginButton, loginLoader;
-let otpEmailInput, otpCode, requestOtpButton, verifyOtpButton, resendOtpButton;
+let phoneNumberInput, passwordInput, passwordToggle, loginButton, loginLoader;
+let otpPhoneInput, otpCode, requestOtpButton, verifyOtpButton, resendOtpButton;
 let formError, successMessage, successMessageText;
 let tabButtons, tabContents;
 
 // State
-let currentOtpEmail = '';
+let currentOtpPhone = '';
 
 // Initialize after DOM loads
 document.addEventListener('DOMContentLoaded', () => {
@@ -33,14 +33,14 @@ function initializeElements() {
   otpVerifyForm = document.getElementById('otpVerifyForm');
   
   // Password login inputs
-  emailInput = document.getElementById('email');
+  phoneNumberInput = document.getElementById('phoneNumber');
   passwordInput = document.getElementById('password');
   passwordToggle = document.getElementById('passwordToggle');
   loginButton = document.getElementById('loginButton');
   loginLoader = document.getElementById('loginLoader');
   
   // OTP inputs
-  otpEmailInput = document.getElementById('otpEmail');
+  otpPhoneInput = document.getElementById('otpPhone');
   otpCode = document.getElementById('otpCode');
   requestOtpButton = document.getElementById('requestOtpButton');
   verifyOtpButton = document.getElementById('verifyOtpButton');
@@ -81,7 +81,7 @@ function setupEventListeners() {
   resendOtpButton.addEventListener('click', handleResendOtp);
   
   // Change email button
-  document.getElementById('changeEmailButton').addEventListener('click', () => {
+  document.getElementById('changePhoneButton').addEventListener('click', () => {
     otpRequestForm.classList.add('active');
     otpVerifyForm.classList.remove('active');
     otpCode.value = '';
@@ -91,14 +91,14 @@ function setupEventListeners() {
   document.getElementById('forgotPasswordLink').addEventListener('click', (e) => {
     e.preventDefault();
     handleTabChange('otp');
-    if (emailInput.value) {
-      otpEmailInput.value = emailInput.value;
+    if (phoneNumberInput.value) {
+      otpPhoneInput.value = phoneNumberInput.value;
     }
   });
   
   // Input validation
-  emailInput.addEventListener('blur', () => validateEmail(emailInput));
-  otpEmailInput.addEventListener('blur', () => validateEmail(otpEmailInput));
+  phoneNumberInput.addEventListener('blur', () => validatePhone(phoneNumberInput));
+  otpPhoneInput.addEventListener('blur', () => validatePhone(otpPhoneInput));
   
   // OTP input formatting
   otpCode.addEventListener('input', (e) => {
@@ -157,11 +157,11 @@ function handleTabChange(tabName) {
 async function handlePasswordLogin(e) {
   e.preventDefault();
   
-  const email = emailInput.value.trim();
+  const phoneNumber = phoneNumberInput.value.trim();
   const password = passwordInput.value;
   
   // Validate inputs
-  if (!validateEmail(emailInput) || !password) {
+  if (!validatePhone(phoneNumberInput) || !password) {
     return;
   }
   
@@ -172,8 +172,8 @@ async function handlePasswordLogin(e) {
   setLoading(loginButton, true);
   
   try {
-    // Attempt login
-    const response = await authService.login(email, password);
+    // Attempt login with phone
+    const response = await authService.loginWithPhone(phoneNumber, password);
     
     // Decode token to check user role
     const decoded = authService.decodeToken(response.access_token);
@@ -204,10 +204,10 @@ async function handlePasswordLogin(e) {
 async function handleOtpRequest(e) {
   e.preventDefault();
   
-  const email = otpEmailInput.value.trim();
+  const phoneNumber = otpPhoneInput.value.trim();
   
-  // Validate email
-  if (!validateEmail(otpEmailInput)) {
+  // Validate phone
+  if (!validatePhone(otpPhoneInput)) {
     return;
   }
   
@@ -218,12 +218,12 @@ async function handleOtpRequest(e) {
   setLoading(requestOtpButton, true);
   
   try {
-    // Request OTP
-    const response = await authService.requestOTP(email);
+    // Request OTP via WhatsApp
+    const response = await authService.requestPhoneOTP(phoneNumber);
     
-    // Store email for verification step
-    currentOtpEmail = email;
-    document.getElementById('otpEmailDisplay').textContent = email;
+    // Store phone for verification step
+    currentOtpPhone = phoneNumber;
+    document.getElementById('otpPhoneDisplay').textContent = phoneNumber;
     
     // Switch to verification form
     otpRequestForm.classList.remove('active');
@@ -266,8 +266,8 @@ async function handleOtpVerify(e) {
   setLoading(verifyOtpButton, true);
   
   try {
-    // Verify OTP and login
-    const response = await authService.verifyOTP(currentOtpEmail, otp);
+    // Verify OTP and login with phone
+    const response = await authService.verifyPhoneOTP(currentOtpPhone, otp);
     
     // Decode token to check user role
     const decoded = authService.decodeToken(response.access_token);
@@ -299,7 +299,7 @@ async function handleResendOtp() {
   setLoading(resendOtpButton, true);
   
   try {
-    await authService.requestOTP(currentOtpEmail);
+    await authService.requestPhoneOTP(currentOtpPhone);
     
     // Show temporary success message
     const otpInfo = document.querySelector('.otp-info p');
@@ -358,6 +358,67 @@ function validateEmail(inputElement) {
     inputElement.classList.add('error');
     return false;
   }
+  
+  inputElement.classList.remove('error');
+  if (errorElement) {
+    errorElement.textContent = '';
+  }
+  return true;
+}
+
+/**
+ * Normalize phone number to E.164 format
+ */
+function normalizePhoneNumber(phone) {
+  // Remove all spaces, dashes, and parentheses
+  let cleaned = phone.replace(/[\s\-\(\)]/g, '');
+  
+  // If it starts with +91, keep it as is
+  if (cleaned.startsWith('+91')) {
+    return cleaned;
+  }
+  
+  // If it starts with 91 (without +), add +
+  if (cleaned.startsWith('91') && cleaned.length === 12) {
+    return '+' + cleaned;
+  }
+  
+  // If it's just 10 digits, assume it's Indian number and add +91
+  if (/^[6-9]\d{9}$/.test(cleaned)) {
+    return '+91' + cleaned;
+  }
+  
+  // Otherwise return as is
+  return cleaned;
+}
+
+/**
+ * Validate phone number (accepts multiple formats)
+ */
+function validatePhone(inputElement) {
+  const phone = inputElement.value.trim();
+  const errorElement = document.getElementById(inputElement.id + 'Error');
+  
+  if (!phone) {
+    showError(errorElement, 'Phone number is required.');
+    inputElement.classList.add('error');
+    return false;
+  }
+  
+  // Normalize the phone number
+  const normalized = normalizePhoneNumber(phone);
+  
+  // Validate normalized format (E.164)
+  const phoneRegex = /^\+[1-9]\d{1,14}$/;
+  
+  if (!phoneRegex.test(normalized)) {
+    showError(errorElement, 'Please enter a valid 10-digit mobile number.');
+    inputElement.classList.add('error');
+    return false;
+  }
+  
+  // Update input with normalized value
+  inputElement.value = normalized;
   
   inputElement.classList.remove('error');
   if (errorElement) {

@@ -1,22 +1,51 @@
 # EkTola - WhatsApp Jeweller Platform Backend
 
+**Status:** ✅ **Backend Complete - Message Sending Service Operational**
+
 ## Overview
-FastAPI backend for a multi-tenant WhatsApp messaging platform for jewellers. Supports contact management, campaign scheduling, and message delivery tracking.
+FastAPI backend for a multi-tenant WhatsApp messaging platform for jewellers. Supports contact management, campaign scheduling, automated message delivery, and tracking.
+
+## ✨ Key Features
+
+✅ **Complete Backend Infrastructure**
+- 34 REST API endpoints
+- PostgreSQL database (9 tables)
+- JWT authentication (email/phone + OTP)
+- Multi-tenant architecture
+
+✅ **Contact Management**
+- Bulk upload (CSV/XLSX)
+- Segment-based filtering
+- Soft deletes
+
+✅ **Campaign Management**
+- One-time & recurring campaigns
+- Automatic scheduling
+- Template-based messaging
+
+✅ **Message Sending Service** 🎉
+- WhatsApp Cloud API integration
+- Background task processing (Celery)
+- Variable replacement & personalization
+- Automatic retries
+- Status tracking (PENDING → SENT → DELIVERED → READ)
 
 ## Tech Stack
 - **Framework**: FastAPI 0.109+
 - **Database**: PostgreSQL with SQLAlchemy ORM
 - **Authentication**: JWT (email + OTP or password)
-- **Task Queue**: Celery + Redis
+- **Task Queue**: Celery + Redis ✅ **Implemented**
+- **Messaging**: WhatsApp Cloud API ✅ **Integrated**
 - **File Processing**: Pandas, OpenPyXL
 
 ## Project Structure
 ```
 app/
-├── main.py                 # FastAPI app entry point
+├── main.py                 # FastAPI app entry point + scheduler
 ├── config.py               # Settings & environment variables
 ├── database.py             # Database connection & session
-├── models/                 # SQLAlchemy models
+├── celery_app.py          # ✅ Celery configuration
+├── models/                 # SQLAlchemy models (9 tables)
 │   ├── user.py
 │   ├── jeweller.py
 │   ├── contact.py
@@ -31,18 +60,24 @@ app/
 │   ├── template.py
 │   ├── message.py
 │   └── analytics.py
-├── routers/                # API endpoints
+├── routers/                # API endpoints (34 endpoints)
 │   ├── auth.py
 │   ├── contacts.py
 │   ├── campaigns.py
 │   ├── templates.py
 │   ├── analytics.py
 │   └── webhooks.py
-├── core/                   # Security & dependencies
-│   ├── security.py         # JWT utilities
-│   └── dependencies.py     # Auth dependencies
+├── services/              # ✅ Business logic services
+│   ├── whatsapp.py        # WhatsApp Cloud API service
+│   └── scheduler.py       # Campaign scheduler
+├── tasks/                 # ✅ Celery background tasks
+│   └── campaign_tasks.py  # Message sending tasks
+├── core/                  # Security & dependencies
+│   ├── security.py        # JWT utilities
+│   └── dependencies.py    # Auth dependencies
 └── utils/
-    └── enums.py            # Shared enums
+    ├── enums.py           # Shared enums
+    └── whatsapp.py        # WhatsApp utilities
 ```
 
 ## Setup
@@ -52,37 +87,84 @@ app/
 pip install -r requirements.txt
 ```
 
-### 2. Environment Variables
-Copy `.env.example` to `.env` and configure:
-```bash
-DATABASE_URL=postgresql://user:password@localhost:5432/ektola_db
-SECRET_KEY=your-secret-key
-REDIS_URL=redis://localhost:6379/0
+### 2. Install Redis
+```powershell
+# Windows (using Chocolatey)
+choco install redis-64
+
+# Or use WSL
+wsl --install
+# In WSL:
+sudo apt install redis-server
+sudo service redis-server start
+
+# Verify
+redis-cli ping  # Should return: PONG
 ```
 
-### 3. Run Database Migrations
-```bash
-# Auto-create tables (development only)
-# Tables are created automatically on app start via Base.metadata.create_all()
+### 3. Environment Variables
+Copy `.env.example` to `.env` and configure:
+```env
+# Database
+DATABASE_URL=postgresql://ektola_user:ektola2024@localhost:5432/ektola_db
 
-# For production, use Alembic:
-alembic init alembic
-alembic revision --autogenerate -m "Initial migration"
+# Security
+SECRET_KEY=your-secret-key-here
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# Redis
+REDIS_URL=redis://localhost:6379/0
+
+# WhatsApp (optional for development)
+WHATSAPP_PHONE_NUMBER_ID=
+WHATSAPP_ACCESS_TOKEN=
+WHATSAPP_OTP_TEMPLATE_NAME=otp_verification
+
+# Environment
+ENVIRONMENT=development
+
+# Admin
+ADMIN_ACCESS_CODE=your_admin_code
+```
+
+### 4. Run Database Migrations
+```bash
+# Tables auto-created on startup
+# Or use Alembic for production:
 alembic upgrade head
 ```
 
-### 4. Run the Server
-```bash
-# Development
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+### 5. Run the Services
 
-# Production
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+**You need to run 3 processes simultaneously:**
+
+**Terminal 1: FastAPI Server**
+```bash
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 5. Access API Documentation
+**Terminal 2: Celery Worker**
+```bash
+celery -A app.celery_app worker --loglevel=info --pool=solo
+```
+
+**Terminal 3: Celery Beat (Scheduler)**
+```bash
+celery -A app.celery_app beat --loglevel=info
+```
+
+### 6. Access API Documentation
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
+
+---
+
+## 📚 Complete Documentation
+
+- **[MESSAGE_SERVICE_GUIDE.md](MESSAGE_SERVICE_GUIDE.md)** - Complete guide for running message sending services
+- **[FRONTEND_CONTRACT.md](FRONTEND_CONTRACT.md)** - API contract for frontend integration
 - OpenAPI JSON: http://localhost:8000/openapi.json
 
 ## Database Models

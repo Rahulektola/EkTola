@@ -1,11 +1,63 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+import asyncio
+import logging
+
 from app.routers import auth, contacts, campaigns, templates, analytics, webhooks
 from app.database import engine, Base
 from app.config import settings
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # Create database tables
 Base.metadata.create_all(bind=engine)
+
+
+# Background task for campaign scheduler
+async def run_campaign_scheduler():
+    """Background task that runs the campaign scheduler every minute"""
+    from app.services.scheduler import campaign_scheduler
+    
+    logger.info("🚀 Campaign scheduler started")
+    
+    while True:
+        try:
+            triggered = campaign_scheduler.check_and_trigger_campaigns()
+            if triggered > 0:
+                logger.info(f"✅ Triggered {triggered} campaigns")
+        except Exception as e:
+            logger.error(f"❌ Scheduler error: {str(e)}")
+        
+        # Wait 60 seconds before next check
+        await asyncio.sleep(60)
+
+
+# Lifespan context manager for startup/shutdown events
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan events"""
+    # Startup
+    logger.info("🎯 Starting EkTola API")
+    
+    # Start campaign scheduler as background task
+    scheduler_task = asyncio.create_task(run_campaign_scheduler())
+    logger.info("📅 Campaign scheduler initialized")
+    
+    yield  # Application runs
+    
+    # Shutdown
+    logger.info("🛑 Shutting down EkTola API")
+    scheduler_task.cancel()
+    try:
+        await scheduler_task
+    except asyncio.CancelledError:
+        logger.info("✅ Scheduler stopped")
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -14,7 +66,8 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
-    openapi_url="/openapi.json"
+    openapi_url="/openapi.json",
+    lifespan=lifespan  # Add lifespan context manager
 )
 
 # CORS middleware

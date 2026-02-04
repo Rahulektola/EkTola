@@ -9,6 +9,7 @@ from app.schemas.template import (
     TemplateCreate, TemplateUpdate, TemplateResponse, TemplateListResponse
 )
 from app.utils.enums import CampaignType
+from app.services.template_service import TemplateService
 from datetime import datetime
 
 router = APIRouter(prefix="/templates", tags=["Templates"])
@@ -171,3 +172,107 @@ def delete_template_admin(
     db.commit()
     
     return None
+
+
+# ============ WhatsApp Template Sync Endpoints ============
+
+@router.post("/admin/{template_id}/sync-to-whatsapp")
+async def sync_template_to_whatsapp(
+    template_id: int,
+    current_admin = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Admin: Create/sync template to WhatsApp Business Account
+    This submits the template for WhatsApp approval
+    """
+    template_service = TemplateService(db)
+    result = await template_service.create_template_in_whatsapp(template_id)
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("error", "Failed to create template in WhatsApp")
+        )
+    
+    return result
+
+
+@router.get("/admin/{template_id}/whatsapp-status")
+async def get_template_whatsapp_status(
+    template_id: int,
+    current_admin = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Admin: Get WhatsApp approval status for a template
+    """
+    template_service = TemplateService(db)
+    result = await template_service.get_template_status(template_id)
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("error", "Failed to get template status")
+        )
+    
+    return result
+
+
+@router.post("/admin/sync-from-whatsapp")
+async def sync_templates_from_whatsapp(
+    current_admin = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Admin: Sync all templates from WhatsApp Business Account
+    Updates local template approval statuses
+    """
+    template_service = TemplateService(db)
+    result = await template_service.sync_templates_from_whatsapp()
+    
+    return result
+
+
+@router.delete("/admin/{template_id}/whatsapp")
+async def delete_template_from_whatsapp(
+    template_id: int,
+    current_admin = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Admin: Delete template from WhatsApp Business Account
+    """
+    template_service = TemplateService(db)
+    result = await template_service.delete_template_from_whatsapp(template_id)
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("error", "Failed to delete template from WhatsApp")
+        )
+    
+    return result
+
+
+@router.get("/admin/whatsapp-templates")
+async def list_whatsapp_templates(
+    limit: int = 100,
+    status_filter: str = None,
+    current_admin = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Admin: List all templates directly from WhatsApp Business Account
+    """
+    from app.utils.whatsapp import get_whatsapp_templates
+    
+    templates = await get_whatsapp_templates(
+        limit=limit,
+        status_filter=status_filter
+    )
+    
+    return {
+        "templates": templates,
+        "total": len(templates)
+    }

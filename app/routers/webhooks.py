@@ -1,13 +1,44 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from app.database import get_db
+from app.config import settings
 from app.models.webhook import WebhookEvent
 from app.models.message import Message
 from app.utils.enums import MessageStatus
+from app.services.template_service import MessageService
 import json
+import hmac
+import hashlib
 from datetime import datetime
 
 router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
+
+
+def verify_webhook_signature(payload: bytes, signature: str) -> bool:
+    """
+    Verify WhatsApp webhook signature using app secret
+    
+    Args:
+        payload: Raw request body
+        signature: X-Hub-Signature-256 header value
+        
+    Returns:
+        True if signature is valid
+    """
+    if not settings.WHATSAPP_APP_SECRET:
+        # Skip verification if app secret not configured (development mode)
+        return True
+    
+    if not signature or not signature.startswith("sha256="):
+        return False
+    
+    expected_signature = hmac.new(
+        settings.WHATSAPP_APP_SECRET.encode(),
+        payload,
+        hashlib.sha256
+    ).hexdigest()
+    
+    return hmac.compare_digest(f"sha256={expected_signature}", signature)
 
 
 @router.post("/whatsapp")
@@ -21,8 +52,19 @@ async def whatsapp_webhook(
     
     This endpoint should be registered in WhatsApp Business Account settings
     """
-    # Get raw payload
-    payload = await request.json()
+    # Get raw payload for signature verification
+    raw_payload = await request.body()
+    signature = request.headers.get("X-Hub-Signature-256", "")
+    
+    # Verify webhook signature
+    if not verify_webhook_signature(raw_payload, signature):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid webhook signature"
+        )
+    
+    # Parse JSON payload
+    payload = json.loads(raw_payload)
     payload_str = json.dumps(payload)
     
     # Store webhook event
@@ -32,6 +74,9 @@ async def whatsapp_webhook(
         received_at=datetime.utcnow()
     )
     db.add(webhook_event)
+    
+    # Initialize message service
+    message_service = MessageService(db)
     
     try:
         # Parse WhatsApp payload
@@ -49,35 +94,50 @@ async def whatsapp_webhook(
                                 for status_update in value["statuses"]:
                                     whatsapp_message_id = status_update.get("id")
                                     status_value = status_update.get("status")
-                                    timestamp = status_update.get("timestamp")
+                                    timestamp_str = status_update.get("timestamp")
                                     
-                                    # Find message in database
-                                    message = db.query(Message).filter(
-                                        Message.whatsapp_message_id == whatsapp_message_id
-                                    ).first()
+                                    # Convert timestamp
+                                    timestamp = None
+                                    if timestamp_str:
+                                        try:
+                                            timestamp = datetime.fromtimestamp(int(timestamp_str))
+                                        except (ValueError, TypeError):
+                                            timestamp = datetime.utcnow()
                                     
-                                    if message:
-                                        # Update message status
-                                        if status_value == "sent":
-                                            message.status = MessageStatus.SENT
-                                            message.sent_at = datetime.fromtimestamp(int(timestamp))
-                                        elif status_value == "delivered":
-                                            message.status = MessageStatus.DELIVERED
-                                            message.delivered_at = datetime.fromtimestamp(int(timestamp))
-                                        elif status_value == "read":
-                                            message.status = MessageStatus.READ
-                                            message.read_at = datetime.fromtimestamp(int(timestamp))
-                                        elif status_value == "failed":
-                                            message.status = MessageStatus.FAILED
-                                            message.failed_at = datetime.fromtimestamp(int(timestamp))
-                                            
-                                            # Get failure reason
-                                            errors = status_update.get("errors", [])
-                                            if errors:
-                                                message.failure_reason = errors[0].get("message", "Unknown error")
-                                        
-                                        message.updated_at = datetime.utcnow()
-                                        webhook_event.jeweller_id = message.jeweller_id
+                                    # Use message service to update status
+                                    updated = message_service.update_message_status(
+                                        whatsapp_message_id=whatsapp_message_id,
+                                        status=status_value,
+                                        timestamp=timestamp
+                                    )
+                                    
+                                    # If message found, get jeweller_id for webhook event
+                                    if updated:
+                                        message = db.query(Message).filter(
+                                            Message.whatsapp_message_id == whatsapp_message_id
+                                        ).first()
+                                        if message:
+                                            webhook_event.jeweller_id = message.jeweller_id
+                                    
+                                    # Handle errors in status update
+                                    if status_value == "failed":
+                                        errors = status_update.get("errors", [])
+                                        if errors:
+                                            error_msg = errors[0].get("message", "Unknown error")
+                                            message = db.query(Message).filter(
+                                                Message.whatsapp_message_id == whatsapp_message_id
+                                            ).first()
+                                            if message:
+                                                message.failure_reason = error_msg
+                                                message.updated_at = datetime.utcnow()
+                            
+                            # Process incoming messages (for future use)
+                            if "messages" in value:
+                                for incoming_message in value["messages"]:
+                                    # Log incoming message for debugging
+                                    from_number = incoming_message.get("from")
+                                    message_type = incoming_message.get("type")
+                                    # TODO: Handle incoming messages if needed
         
         webhook_event.processed = True
         webhook_event.processed_at = datetime.utcnow()
@@ -112,11 +172,13 @@ def whatsapp_webhook_verify(
     token = request.query_params.get("hub.verify_token")
     challenge = request.query_params.get("hub.challenge")
     
-    # TODO: Validate token against stored verify_token in Jeweller model
-    # For now, accept any token (insecure - fix in production)
+    # Validate token against configured verify token
+    expected_token = settings.WHATSAPP_WEBHOOK_VERIFY_TOKEN
     
     if mode == "subscribe" and challenge:
-        return int(challenge)
+        # In development, accept if no token configured
+        if not expected_token or token == expected_token:
+            return int(challenge)
     
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,

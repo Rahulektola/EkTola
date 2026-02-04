@@ -265,3 +265,6 @@ service-account.json
 # -----------------------------------------------------------------------------
 .cache/
 *.cache
+thumbcache_*
+__pycache__/
+.__pycache__/

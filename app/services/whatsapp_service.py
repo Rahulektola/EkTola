@@ -514,54 +514,31 @@ class WhatsAppService:
             return []
         
         try:
-            # Use pywa 3.x get_templates if available, otherwise use direct API
-            if hasattr(self._client, 'get_templates'):
-                templates_result = await self._client.get_templates()
-                template_list = []
-                for template in templates_result:
-                    template_dict = {
-                        "id": template.id if hasattr(template, 'id') else None,
-                        "name": template.name if hasattr(template, 'name') else None,
-                        "status": template.status.value if hasattr(template, 'status') else None,
-                        "category": template.category.value if hasattr(template, 'category') else None,
-                        "language": template.language.value if hasattr(template, 'language') else None,
-                        "components": template.components if hasattr(template, 'components') else [],
-                    }
-                    template_list.append(template_dict)
-                return template_list
+            # Use PyWa library exclusively for template management
+            if not hasattr(self._client, 'get_templates'):
+                logger.error("PyWa client does not support get_templates - ensure PyWa 3.8.0+ is installed")
+                return []
             
-            # Fallback to direct API call
-            url = f"https://graph.facebook.com/v21.0/{settings.WHATSAPP_BUSINESS_ACCOUNT_ID}/message_templates"
-            
-            headers = {
-                "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
-            }
-            
-            params = {
-                "limit": limit,
-            }
-            
-            if status_filter:
-                params["status"] = status_filter
-            
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url, headers=headers, params=params)
-                response.raise_for_status()
-                result = response.json()
-            
+            templates_result = await self._client.get_templates()
             template_list = []
-            for template in result.get("data", []):
+            for template in templates_result:
                 template_dict = {
-                    "id": template.get("id"),
-                    "name": template.get("name"),
-                    "status": template.get("status"),
-                    "category": template.get("category"),
-                    "language": template.get("language"),
-                    "components": template.get("components", []),
+                    "id": template.id if hasattr(template, 'id') else None,
+                    "name": template.name if hasattr(template, 'name') else None,
+                    "status": template.status.value if hasattr(template, 'status') else None,
+                    "category": template.category.value if hasattr(template, 'category') else None,
+                    "language": template.language.value if hasattr(template, 'language') else None,
+                    "components": template.components if hasattr(template, 'components') else [],
                 }
+                # Apply status filter if specified
+                if status_filter and template_dict["status"] != status_filter:
+                    continue
                 template_list.append(template_dict)
+                # Apply limit
+                if len(template_list) >= limit:
+                    break
             
-            logger.info(f"Retrieved {len(template_list)} templates")
+            logger.info(f"Retrieved {len(template_list)} templates via PyWa")
             return template_list
             
         except httpx.HTTPStatusError as e:
@@ -672,30 +649,27 @@ class WhatsAppService:
                     "buttons": button_list,
                 })
             
-            # API endpoint for template creation
-            url = f"https://graph.facebook.com/v21.0/{settings.WHATSAPP_BUSINESS_ACCOUNT_ID}/message_templates"
+            # Use PyWa library exclusively - create_template method
+            if not hasattr(self._client, 'create_template'):
+                logger.error("PyWa client does not support create_template - ensure PyWa 3.8.0+ is installed")
+                return TemplateResult(
+                    success=False,
+                    template_name=name,
+                    error="Template creation not supported by PyWa client",
+                )
             
-            headers = {
-                "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
-                "Content-Type": "application/json",
-            }
+            # PyWa create_template accepts structured component data
+            result = await self._client.create_template(
+                name=name,
+                category=category.upper(),
+                language=language,
+                components=components,
+            )
             
-            payload = {
-                "name": name,
-                "category": category.upper(),
-                "language": language,
-                "components": components,
-            }
-            
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(url, json=payload, headers=headers)
-                response.raise_for_status()
-                result = response.json()
-            
-            logger.info(f"Template created successfully: {name}")
+            logger.info(f"Template created successfully via PyWa: {name}")
             return TemplateResult(
                 success=True,
-                template_id=result.get("id"),
+                template_id=result.get("id") if isinstance(result, dict) else getattr(result, 'id', None),
                 template_name=name,
                 status="PENDING",
             )
@@ -744,31 +718,17 @@ class WhatsAppService:
             )
         
         try:
-            # Use pywa 3.x delete_template if available
-            if hasattr(self._client, 'delete_template'):
-                await self._client.delete_template(template_name=template_name)
-                logger.info(f"Template deleted successfully: {template_name}")
+            # Use PyWa library exclusively for template deletion
+            if not hasattr(self._client, 'delete_template'):
+                logger.error("PyWa client does not support delete_template - ensure PyWa 3.8.0+ is installed")
                 return TemplateResult(
-                    success=True,
+                    success=False,
                     template_name=template_name,
+                    error="Template deletion not supported by PyWa client",
                 )
             
-            # Fallback to direct API call
-            url = f"https://graph.facebook.com/v21.0/{settings.WHATSAPP_BUSINESS_ACCOUNT_ID}/message_templates"
-            
-            headers = {
-                "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
-            }
-            
-            params = {
-                "name": template_name,
-            }
-            
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.delete(url, headers=headers, params=params)
-                response.raise_for_status()
-            
-            logger.info(f"Template deleted successfully: {template_name}")
+            await self._client.delete_template(template_name=template_name)
+            logger.info(f"Template deleted successfully via PyWa: {template_name}")
             return TemplateResult(
                 success=True,
                 template_name=template_name,

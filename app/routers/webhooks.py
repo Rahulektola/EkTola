@@ -47,8 +47,8 @@ async def whatsapp_webhook(
     db: Session = Depends(get_db)
 ):
     """
-    WhatsApp Cloud API webhook endpoint
-    Receives message status updates from WhatsApp
+    WhatsApp webhook endpoint for receiving message status updates
+    Receives callbacks from WhatsApp Business API via PyWa webhook processing
     
     This endpoint should be registered in WhatsApp Business Account settings
     """

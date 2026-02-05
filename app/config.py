@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str
     
-    # WhatsApp Cloud API Settings
+    # WhatsApp Business API Settings (via PyWa)
     WHATSAPP_API_VERSION: str = "v18.0"
     WHATSAPP_PHONE_NUMBER_ID: str = ""  # Your WhatsApp Business Phone Number ID
     WHATSAPP_ACCESS_TOKEN: str = ""  # Your WhatsApp Business API access token

@@ -3,66 +3,52 @@
 
 ---
 
-## 🎯 What You Need to Build the PWA
+## 🎯 What You Need to Build the TypeScript Frontend
 
-You are a frontend developer needs these files and documentation to build the Progressive Web App without waiting for the full backend implementation.
-this is an edit . 
+This document provides everything needed to build a TypeScript frontend for the EkTola platform.
+
 ---
 
-## 📦 Files to Share
+## 📦 TypeScript Types Reference
 
-### 1. **API Contract** (AUTO-GENERATED)
-
-**Primary Source: OpenAPI Specification**
-
-Once you run the backend locally, share:
-- **OpenAPI JSON**: `http://localhost:8000/openapi.json`
-- **Interactive Docs**: `http://localhost:8000/docs` (Swagger UI)
-- **Alternative Docs**: `http://localhost:8000/redoc`
-
-Your frontend dev can:
-1. Generate TypeScript types automatically
-2. Generate API client code
-3. See all request/response examples
-4. Test endpoints interactively
-
-### 2. **TypeScript Type Generation** (RECOMMENDED)
-
-Install and run `openapi-typescript` to generate TypeScript interfaces:
+### Generate Types from OpenAPI
 
 ```bash
-# In frontend project
+# Install openapi-typescript
 npm install -D openapi-typescript
 
 # Generate types from running backend
 npx openapi-typescript http://localhost:8000/openapi.json -o src/types/api.ts
-
-# Or from downloaded openapi.json file
-npx openapi-typescript ./openapi.json -o src/types/api.ts
 ```
 
-This creates a complete TypeScript type file with all API schemas.
+### API Documentation URLs
+- **OpenAPI JSON**: `http://localhost:8000/openapi.json`
+- **Swagger UI**: `http://localhost:8000/docs`
+- **ReDoc**: `http://localhost:8000/redoc`
 
-### 3. **Shared Files** (Copy these from backend)
+---
 
-**Must Share:**
-- `app/utils/enums.py` → Convert to TypeScript enums
-- `app/schemas/*.py` → Reference for understanding data structures
+## 📋 Complete TypeScript Type Definitions
 
-**TypeScript Enum Conversion:**
+Copy these type definitions into your TypeScript frontend project.
+
+### Enums (`types/enums.ts`)
+
 ```typescript
-// src/types/enums.ts
+// ============ Contact Segment Types ============
 export enum SegmentType {
   GOLD_LOAN = "GOLD_LOAN",
   GOLD_SIP = "GOLD_SIP",
   MARKETING = "MARKETING"
 }
 
+// ============ Campaign Types ============
 export enum CampaignType {
   UTILITY = "UTILITY",
   MARKETING = "MARKETING"
 }
 
+// ============ Campaign Status ============
 export enum CampaignStatus {
   DRAFT = "DRAFT",
   ACTIVE = "ACTIVE",
@@ -70,6 +56,7 @@ export enum CampaignStatus {
   COMPLETED = "COMPLETED"
 }
 
+// ============ Message Status ============
 export enum MessageStatus {
   QUEUED = "QUEUED",
   SENT = "SENT",
@@ -78,6 +65,7 @@ export enum MessageStatus {
   FAILED = "FAILED"
 }
 
+// ============ Recurrence Types ============
 export enum RecurrenceType {
   DAILY = "DAILY",
   WEEKLY = "WEEKLY",
@@ -85,12 +73,468 @@ export enum RecurrenceType {
   ONE_TIME = "ONE_TIME"
 }
 
+// ============ Supported Languages ============
 export enum Language {
   ENGLISH = "en",
   HINDI = "hi",
   KANNADA = "kn",
   TAMIL = "ta",
   PUNJABI = "pa"
+}
+
+// ============ Helper Functions ============
+export const getLanguageLabel = (lang: Language): string => {
+  const labels: Record<Language, string> = {
+    [Language.ENGLISH]: "English",
+    [Language.HINDI]: "हिंदी",
+    [Language.KANNADA]: "ಕನ್ನಡ",
+    [Language.TAMIL]: "தமிழ்",
+    [Language.PUNJABI]: "ਪੰਜਾਬੀ"
+  };
+  return labels[lang] || lang;
+};
+
+export const getSegmentLabel = (segment: SegmentType): string => {
+  const labels: Record<SegmentType, string> = {
+    [SegmentType.GOLD_LOAN]: "Gold Loan",
+    [SegmentType.GOLD_SIP]: "Gold SIP",
+    [SegmentType.MARKETING]: "Marketing"
+  };
+  return labels[segment] || segment;
+};
+```
+
+### Authentication Types (`types/auth.ts`)
+
+```typescript
+// ============ Token Types ============
+export interface Token {
+  access_token: string;
+  refresh_token: string;
+  token_type: "bearer";
+}
+
+export interface TokenData {
+  user_id: number;
+  email: string | null;
+  phone_number: string | null;
+  is_admin: boolean;
+  jeweller_id: number | null;
+  exp: number;
+  type: "access" | "refresh";
+}
+
+// ============ Login Request Types ============
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface PhoneLoginRequest {
+  phone_number: string;
+  password: string;
+}
+
+// ============ OTP Request Types ============
+export interface PhoneOTPRequest {
+  phone_number: string;
+}
+
+export interface PhoneOTPVerifyRequest {
+  phone_number: string;
+  otp_code: string;
+}
+
+// ============ Registration Types ============
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  business_name: string;
+  phone_number: string;
+}
+
+export interface AdminRegisterRequest {
+  email: string;
+  password: string;
+  full_name: string;
+  access_code: string;
+}
+
+// ============ Response Types ============
+export interface UserResponse {
+  id: number;
+  email: string;
+  is_active: boolean;
+  is_admin: boolean;
+  created_at: string; // ISO datetime
+}
+
+export interface JewellerResponse {
+  id: number;
+  user_id: number;
+  business_name: string;
+  phone_number: string;
+  is_approved: boolean;
+  is_active: boolean;
+  timezone: string;
+  waba_id: string | null;
+  phone_number_id: string | null;
+  created_at: string; // ISO datetime
+}
+
+export interface OTPRequestResponse {
+  message: string;
+  otp?: string; // Only in development mode
+}
+```
+
+### Contact Types (`types/contact.ts`)
+
+```typescript
+import { SegmentType, Language } from './enums';
+
+export interface ContactCreate {
+  phone_number: string;
+  segment: SegmentType;
+  preferred_language?: Language;
+  name?: string;
+  customer_id?: string;
+  notes?: string;
+  tags?: string;
+}
+
+export interface ContactUpdate {
+  name?: string;
+  segment?: SegmentType;
+  preferred_language?: Language;
+  notes?: string;
+  tags?: string;
+  opted_out?: boolean;
+}
+
+export interface ContactResponse {
+  id: number;
+  jeweller_id: number;
+  phone_number: string;
+  name: string | null;
+  customer_id: string | null;
+  segment: SegmentType;
+  preferred_language: Language;
+  opted_out: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContactListResponse {
+  contacts: ContactResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface ContactListParams {
+  page?: number;
+  page_size?: number;
+  segment?: SegmentType;
+  search?: string;
+  opted_out?: boolean;
+}
+
+export interface ContactSegmentStats {
+  segment: SegmentType;
+  count: number;
+  opted_out_count: number;
+}
+
+export interface ContactImportReport {
+  total_rows: number;
+  imported: number;
+  updated: number;
+  failed: number;
+  failure_details: Array<{
+    row: number;
+    phone: string;
+    reason: string;
+  }>;
+}
+```
+
+### Campaign Types (`types/campaign.ts`)
+
+```typescript
+import { CampaignType, CampaignStatus, RecurrenceType, SegmentType } from './enums';
+
+export interface CampaignCreate {
+  name: string;
+  description?: string;
+  campaign_type: CampaignType;
+  sub_segment?: SegmentType;
+  template_id: number;
+  recurrence_type: RecurrenceType;
+  start_date: string; // "YYYY-MM-DD"
+  start_time: string; // "HH:MM:SS"
+  end_date?: string;
+  variable_mapping?: Record<string, string>;
+}
+
+export interface CampaignUpdate {
+  name?: string;
+  description?: string;
+  start_time?: string;
+  end_date?: string;
+  variable_mapping?: Record<string, string>;
+}
+
+export interface CampaignResponse {
+  id: number;
+  jeweller_id: number;
+  name: string;
+  description: string | null;
+  campaign_type: CampaignType;
+  sub_segment: SegmentType | null;
+  template_id: number;
+  recurrence_type: RecurrenceType;
+  start_date: string;
+  start_time: string;
+  end_date: string | null;
+  timezone: string;
+  status: CampaignStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CampaignListResponse {
+  campaigns: CampaignResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface CampaignListParams {
+  page?: number;
+  page_size?: number;
+  status_filter?: CampaignStatus;
+  campaign_type?: CampaignType;
+}
+
+export interface CampaignRunResponse {
+  id: number;
+  campaign_id: number;
+  scheduled_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  status: string;
+  total_contacts: number;
+  eligible_contacts: number;
+  messages_queued: number;
+  messages_sent: number;
+  messages_delivered: number;
+  messages_read: number;
+  messages_failed: number;
+}
+
+export interface CampaignStatsResponse {
+  campaign_id: number;
+  campaign_name: string;
+  total_runs: number;
+  total_messages_sent: number;
+  total_delivered: number;
+  total_read: number;
+  total_failed: number;
+  delivery_rate: number;
+  read_rate: number;
+  last_run_at: string | null;
+  next_run_at: string | null;
+}
+```
+
+### Template Types (`types/template.ts`)
+
+```typescript
+import { CampaignType, SegmentType, Language } from './enums';
+
+export interface TemplateTranslationCreate {
+  language: Language;
+  header_text?: string;
+  body_text: string;
+  footer_text?: string;
+}
+
+export interface TemplateTranslationResponse {
+  id: number;
+  template_id: number;
+  language: Language;
+  header_text: string | null;
+  body_text: string;
+  footer_text: string | null;
+  whatsapp_template_id: string | null;
+  approval_status: string;
+  created_at: string;
+}
+
+export interface TemplateCreate {
+  template_name: string;
+  display_name: string;
+  campaign_type: CampaignType;
+  sub_segment?: SegmentType;
+  description?: string;
+  category: "UTILITY" | "MARKETING" | "AUTHENTICATION";
+  variable_count?: number;
+  variable_names?: string[];
+  translations: TemplateTranslationCreate[];
+}
+
+export interface TemplateUpdate {
+  display_name?: string;
+  description?: string;
+  is_active?: boolean;
+}
+
+export interface TemplateResponse {
+  id: number;
+  template_name: string;
+  display_name: string;
+  campaign_type: CampaignType;
+  sub_segment: SegmentType | null;
+  description: string | null;
+  category: string;
+  is_active: boolean;
+  variable_count: number;
+  variable_names: string | null;
+  translations: TemplateTranslationResponse[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TemplateListResponse {
+  templates: TemplateResponse[];
+  total: number;
+}
+```
+
+### Message Types (`types/message.ts`)
+
+```typescript
+import { MessageStatus, Language } from './enums';
+
+export interface MessageResponse {
+  id: number;
+  jeweller_id: number;
+  contact_id: number;
+  campaign_run_id: number | null;
+  phone_number: string;
+  template_name: string;
+  language: Language;
+  whatsapp_message_id: string | null;
+  status: MessageStatus;
+  queued_at: string;
+  sent_at: string | null;
+  delivered_at: string | null;
+  read_at: string | null;
+  failed_at: string | null;
+  failure_reason: string | null;
+  retry_count: number;
+}
+
+export interface MessageStatsResponse {
+  total_messages: number;
+  queued: number;
+  sent: number;
+  delivered: number;
+  read: number;
+  failed: number;
+  delivery_rate: number;
+  read_rate: number;
+}
+
+export interface FailureBreakdown {
+  failure_reason: string;
+  count: number;
+}
+```
+
+### Analytics Types (`types/analytics.ts`)
+
+```typescript
+import { ContactSegmentStats } from './contact';
+import { CampaignStatsResponse } from './campaign';
+import { FailureBreakdown } from './message';
+
+export interface JewellerDashboardResponse {
+  total_contacts: number;
+  opted_out_contacts: number;
+  active_campaigns: number;
+  total_messages_sent: number;
+  recent_delivery_rate: number;
+  recent_read_rate: number;
+  contact_distribution: ContactSegmentStats[];
+  recent_campaign_runs: CampaignStatsResponse[];
+}
+
+export interface JewellerUsageStats {
+  jeweller_id: number;
+  business_name: string;
+  total_contacts: number;
+  total_campaigns: number;
+  total_messages_sent: number;
+  messages_last_30_days: number;
+  delivery_rate: number;
+  read_rate: number;
+  last_active: string | null;
+}
+
+export interface AdminDashboardResponse {
+  total_jewellers: number;
+  active_jewellers: number;
+  total_contacts_across_jewellers: number;
+  total_messages_sent: number;
+  messages_last_30_days: number;
+  overall_delivery_rate: number;
+  overall_read_rate: number;
+  jeweller_stats: JewellerUsageStats[];
+}
+
+export interface LanguageDistribution {
+  language: string;
+  message_count: number;
+  percentage: number;
+}
+
+export interface CampaignTypeDistribution {
+  campaign_type: string;
+  count: number;
+  percentage: number;
+}
+
+export interface AdminAnalyticsResponse {
+  total_messages: number;
+  language_distribution: LanguageDistribution[];
+  campaign_type_distribution: CampaignTypeDistribution[];
+  failure_breakdown: FailureBreakdown[];
+  daily_message_volume: Array<{ date: string; count: number }>;
+}
+```
+
+### API Helper Types (`types/api.ts`)
+
+```typescript
+export interface ApiError {
+  detail: string;
+  status_code?: number;
+}
+
+export interface ValidationError {
+  detail: Array<{
+    loc: (string | number)[];
+    msg: string;
+    type: string;
+  }>;
+}
+
+export interface PaginationParams {
+  page?: number;
+  page_size?: number;
 }
 ```
 
@@ -114,6 +558,7 @@ export enum Language {
 {
   "user_id": 123,
   "email": "jeweller@example.com",
+  "phone_number": "+919876543210",
   "is_admin": false,
   "jeweller_id": 45,
   "exp": 1706112000,
@@ -125,62 +570,14 @@ export enum Language {
 - Access Token: 30 minutes
 - Refresh Token: 7 days
 
-### Frontend Implementation
+### Authentication Methods
 
-```typescript
-// Example: src/services/auth.ts
-class AuthService {
-  private accessToken: string | null = null;
-  private refreshToken: string | null = null;
+**Jeweller Login Options:**
+1. Phone + Password: `POST /auth/login/phone`
+2. WhatsApp OTP: `POST /auth/otp/request/phone` → `POST /auth/otp/verify/phone`
 
-  async login(email: string, password: string) {
-    const response = await fetch('http://localhost:8000/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-    
-    const data = await response.json();
-    this.accessToken = data.access_token;
-    this.refreshToken = data.refresh_token;
-    
-    // Store in localStorage or secure storage
-    localStorage.setItem('access_token', data.access_token);
-    localStorage.setItem('refresh_token', data.refresh_token);
-    
-    return data;
-  }
-
-  getAuthHeader() {
-    const token = localStorage.getItem('access_token');
-    return token ? { 'Authorization': `Bearer ${token}` } : {};
-  }
-
-  async apiCall(url: string, options: RequestInit = {}) {
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        ...options.headers,
-        ...this.getAuthHeader()
-      }
-    });
-    
-    if (response.status === 401) {
-      // Handle token refresh or redirect to login
-      this.logout();
-    }
-    
-    return response;
-  }
-
-  logout() {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    this.accessToken = null;
-    this.refreshToken = null;
-  }
-}
-```
+**Admin Login:**
+1. Email + Password: `POST /auth/login`
 
 ---
 
@@ -189,539 +586,250 @@ class AuthService {
 ### Base URL
 ```
 Development: http://localhost:8000
-Production: https://api.ektola.com (TBD)
 ```
 
 ### Authentication Endpoints
 
-```typescript
-// Register Jeweller
-POST /auth/register
-Body: {
-  email: string;
-  password: string;
-  business_name: string;
-  phone_number: string;
-}
-Response: { access_token, refresh_token, token_type }
+| Method | Endpoint | Description | Request Body | Response |
+|--------|----------|-------------|--------------|----------|
+| POST | `/auth/register` | Register jeweller | `RegisterRequest` | `Token` |
+| POST | `/auth/register-admin` | Register admin | `AdminRegisterRequest` | `Token` |
+| POST | `/auth/login` | Admin email login | `LoginRequest` | `Token` |
+| POST | `/auth/login/phone` | Jeweller phone login | `PhoneLoginRequest` | `Token` |
+| POST | `/auth/otp/request/phone` | Request WhatsApp OTP | `PhoneOTPRequest` | `OTPRequestResponse` |
+| POST | `/auth/otp/verify/phone` | Verify OTP & login | `PhoneOTPVerifyRequest` | `Token` |
+| GET | `/auth/me` | Get user profile | - | `UserResponse` |
+| GET | `/auth/me/jeweller` | Get jeweller profile | - | `JewellerResponse` |
 
-// Login
-POST /auth/login
-Body: { email: string; password: string }
-Response: { access_token, refresh_token, token_type }
+### Contact Endpoints
 
-// Request OTP
-POST /auth/otp/request
-Body: { email: string }
-Response: { message: string, otp?: string } // otp only in dev
+| Method | Endpoint | Description | Request Body | Response |
+|--------|----------|-------------|--------------|----------|
+| POST | `/contacts/` | Create contact | `ContactCreate` | `ContactResponse` |
+| GET | `/contacts/` | List contacts | Query params | `ContactListResponse` |
+| GET | `/contacts/{id}` | Get contact | - | `ContactResponse` |
+| PATCH | `/contacts/{id}` | Update contact | `ContactUpdate` | `ContactResponse` |
+| DELETE | `/contacts/{id}` | Delete contact | - | 204 |
+| GET | `/contacts/stats` | Get segment stats | - | `ContactSegmentStats[]` |
+| POST | `/contacts/upload` | Upload CSV/XLSX | FormData | `ContactImportReport` |
 
-// Verify OTP
-POST /auth/otp/verify
-Body: { email: string; otp_code: string }
-Response: { access_token, refresh_token, token_type }
+### Campaign Endpoints
 
-// Get Profile
-GET /auth/me
-Headers: { Authorization: "Bearer <token>" }
-Response: UserResponse
+| Method | Endpoint | Description | Request Body | Response |
+|--------|----------|-------------|--------------|----------|
+| POST | `/campaigns/` | Create campaign | `CampaignCreate` | `CampaignResponse` |
+| GET | `/campaigns/` | List campaigns | Query params | `CampaignListResponse` |
+| GET | `/campaigns/{id}` | Get campaign | - | `CampaignResponse` |
+| PATCH | `/campaigns/{id}` | Update campaign | `CampaignUpdate` | `CampaignResponse` |
+| DELETE | `/campaigns/{id}` | Delete campaign | - | 204 |
+| POST | `/campaigns/{id}/activate` | Activate | - | `CampaignResponse` |
+| POST | `/campaigns/{id}/pause` | Pause | - | `CampaignResponse` |
+| POST | `/campaigns/{id}/resume` | Resume | - | `CampaignResponse` |
+| GET | `/campaigns/{id}/stats` | Get stats | - | `CampaignStatsResponse` |
+| GET | `/campaigns/{id}/runs` | Get runs | - | `CampaignRunResponse[]` |
 
-// Get Jeweller Profile
-GET /auth/me/jeweller
-Headers: { Authorization: "Bearer <token>" }
-Response: JewellerResponse
-```
+### Template Endpoints (Admin)
 
-### Contact Management
+| Method | Endpoint | Description | Request Body | Response |
+|--------|----------|-------------|--------------|----------|
+| POST | `/templates/` | Create template | `TemplateCreate` | `TemplateResponse` |
+| GET | `/templates/` | List templates | Query params | `TemplateListResponse` |
+| GET | `/templates/{id}` | Get template | - | `TemplateResponse` |
+| PATCH | `/templates/{id}` | Update template | `TemplateUpdate` | `TemplateResponse` |
+| DELETE | `/templates/{id}` | Delete template | - | 204 |
+| POST | `/templates/sync` | Sync from WhatsApp | - | `{ synced, created, updated }` |
 
-```typescript
-// Upload Contacts (CSV/XLSX)
-POST /contacts/upload
-Headers: { Authorization: "Bearer <token>" }
-Body: FormData with file
-Response: ContactImportReport
+### Analytics Endpoints
 
-// Create Single Contact
-POST /contacts/
-Body: ContactCreate
-Response: ContactResponse
-
-// List Contacts (Paginated)
-GET /contacts/?page=1&page_size=50&segment=GOLD_LOAN&search=john
-Response: ContactListResponse
-
-// Get Contact Stats
-GET /contacts/stats
-Response: ContactSegmentStats[]
-
-// Get Contact
-GET /contacts/{id}
-Response: ContactResponse
-
-// Update Contact
-PATCH /contacts/{id}
-Body: ContactUpdate (partial)
-Response: ContactResponse
-
-// Delete Contact
-DELETE /contacts/{id}
-Response: 204 No Content
-```
-
-### Campaign Management
-
-```typescript
-// Create Campaign
-POST /campaigns/
-Body: CampaignCreate
-Response: CampaignResponse
-
-// List Campaigns
-GET /campaigns/?page=1&status_filter=ACTIVE&campaign_type=UTILITY
-Response: CampaignListResponse
-
-// Get Campaign
-GET /campaigns/{id}
-Response: CampaignResponse
-
-// Update Campaign
-PATCH /campaigns/{id}
-Body: CampaignUpdate
-Response: CampaignResponse
-
-// Activate Campaign
-POST /campaigns/{id}/activate
-Response: CampaignResponse
-
-// Pause Campaign
-POST /campaigns/{id}/pause
-Response: CampaignResponse
-
-// Resume Campaign
-POST /campaigns/{id}/resume
-Response: CampaignResponse
-
-// Get Campaign Runs
-GET /campaigns/{id}/runs?limit=10
-Response: CampaignRunResponse[]
-
-// Get Campaign Stats
-GET /campaigns/{id}/stats
-Response: CampaignStatsResponse
-
-// Delete Campaign
-DELETE /campaigns/{id}
-Response: 204 No Content
-```
-
-### Templates
-
-```typescript
-// List Templates (Jeweller)
-GET /templates/?campaign_type=UTILITY
-Response: TemplateListResponse
-
-// Get Template (Jeweller)
-GET /templates/{id}
-Response: TemplateResponse
-```
-
-### Analytics
-
-```typescript
-// Jeweller Dashboard
-GET /analytics/dashboard
-Response: JewellerDashboardResponse
-
-// Admin Dashboard (Admin only)
-GET /analytics/admin/dashboard
-Response: AdminDashboardResponse
-
-// Admin Detailed Analytics (Admin only)
-GET /analytics/admin/detailed?days=30
-Response: AdminAnalyticsResponse
-```
-
----
-
-## 📋 Key Data Models (TypeScript Interfaces)
-
-### Contact
-```typescript
-interface ContactResponse {
-  id: number;
-  jeweller_id: number;
-  phone_number: string;
-  name: string | null;
-  customer_id: string | null;
-  segment: SegmentType;
-  preferred_language: Language;
-  opted_out: boolean;
-  created_at: string; // ISO 8601
-  updated_at: string;
-}
-
-interface ContactCreate {
-  phone_number: string;
-  segment: SegmentType;
-  preferred_language: Language;
-  name?: string;
-  customer_id?: string;
-  notes?: string;
-  tags?: string;
-}
-```
-
-### Campaign
-```typescript
-interface CampaignResponse {
-  id: number;
-  jeweller_id: number;
-  name: string;
-  description: string | null;
-  campaign_type: CampaignType;
-  sub_segment: SegmentType | null;
-  template_id: number;
-  recurrence_type: RecurrenceType;
-  start_date: string; // YYYY-MM-DD
-  start_time: string; // HH:MM:SS
-  end_date: string | null;
-  timezone: string;
-  status: CampaignStatus;
-  created_at: string;
-  updated_at: string;
-}
-
-interface CampaignCreate {
-  name: string;
-  description?: string;
-  campaign_type: CampaignType;
-  sub_segment?: SegmentType; // Required if campaign_type is UTILITY
-  template_id: number;
-  recurrence_type: RecurrenceType;
-  start_date: string; // YYYY-MM-DD
-  start_time: string; // HH:MM:SS
-  end_date?: string;
-  variable_mapping?: Record<string, string>;
-}
-```
-
-### Dashboard
-```typescript
-interface JewellerDashboardResponse {
-  total_contacts: number;
-  opted_out_contacts: number;
-  active_campaigns: number;
-  total_messages_sent: number;
-  recent_delivery_rate: number; // Percentage
-  recent_read_rate: number; // Percentage
-  contact_distribution: ContactSegmentStats[];
-  recent_campaign_runs: CampaignStatsResponse[];
-}
-
-interface ContactSegmentStats {
-  segment: SegmentType;
-  count: number;
-  opted_out_count: number;
-}
-```
+| Method | Endpoint | Description | Response |
+|--------|----------|-------------|----------|
+| GET | `/analytics/dashboard` | Jeweller dashboard | `JewellerDashboardResponse` |
+| GET | `/analytics/admin/dashboard` | Admin dashboard | `AdminDashboardResponse` |
+| GET | `/analytics/admin/analytics` | Admin analytics | `AdminAnalyticsResponse` |
 
 ---
 
 ## 🚨 Error Handling
 
 ### Standard Error Response
-```json
-{
-  "detail": "Error message here"
+```typescript
+interface ApiError {
+  detail: string;
 }
 ```
 
-### Common Status Codes
+### Validation Error Response
+```typescript
+interface ValidationError {
+  detail: Array<{
+    loc: (string | number)[];
+    msg: string;
+    type: string;
+  }>;
+}
+```
+
+### HTTP Status Codes
 - `200 OK` - Success
 - `201 Created` - Resource created
-- `204 No Content` - Success with no response body
+- `204 No Content` - Success with no body
 - `400 Bad Request` - Validation error
-- `401 Unauthorized` - Missing or invalid token
+- `401 Unauthorized` - Invalid/missing token
 - `403 Forbidden` - Insufficient permissions
 - `404 Not Found` - Resource not found
 - `422 Unprocessable Entity` - Validation error (detailed)
 
-### Frontend Error Handling Example
-```typescript
-async function handleApiCall<T>(url: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      ...options?.headers,
-      ...authService.getAuthHeader()
-    }
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'API request failed');
-  }
-
-  return response.json();
-}
-```
-
 ---
 
-## 📱 File Upload Pattern
+## 📱 File Upload
 
 ### Contact Upload (CSV/XLSX)
 
-**Frontend Implementation:**
+**Endpoint:** `POST /contacts/upload`
+
+**Request:**
 ```typescript
-async function uploadContacts(file: File) {
-  const formData = new FormData();
-  formData.append('file', file);
+const formData = new FormData();
+formData.append('file', file);
 
-  const response = await fetch('http://localhost:8000/contacts/upload', {
-    method: 'POST',
-    headers: {
-      ...authService.getAuthHeader()
-      // Don't set Content-Type - browser will set it with boundary
-    },
-    body: formData
-  });
-
-  const result: ContactImportReport = await response.json();
-  return result;
-}
+const response = await fetch('/contacts/upload', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${token}`
+  },
+  body: formData
+});
 ```
 
-**Expected Response:**
-```json
-{
-  "total_rows": 100,
-  "imported": 85,
-  "updated": 10,
-  "failed": 5,
-  "failure_details": [
-    {
-      "row": 23,
-      "phone": "+1234567890",
-      "reason": "Invalid segment: INVALID_VALUE"
-    }
-  ]
-}
+**CSV Format:**
+```csv
+phone_number,segment,preferred_language,name,customer_id
++919876543210,GOLD_LOAN,en,John Doe,CUST001
++919876543211,GOLD_SIP,hi,Jane Smith,CUST002
 ```
 
+**Required columns:** `phone_number`, `segment`, `preferred_language`
+**Optional columns:** `name`, `customer_id`, `notes`, `tags`
+
 ---
 
-## 🧪 Mock Data for Development
-
-While backend is being built, use these mock responses:
+## 🔧 API Client Example
 
 ```typescript
-// src/mocks/api.ts
-export const mockDashboard: JewellerDashboardResponse = {
-  total_contacts: 1250,
-  opted_out_contacts: 45,
-  active_campaigns: 3,
-  total_messages_sent: 5430,
-  recent_delivery_rate: 94.5,
-  recent_read_rate: 67.8,
-  contact_distribution: [
-    { segment: SegmentType.GOLD_LOAN, count: 500, opted_out_count: 20 },
-    { segment: SegmentType.GOLD_SIP, count: 450, opted_out_count: 15 },
-    { segment: SegmentType.MARKETING, count: 300, opted_out_count: 10 }
-  ],
-  recent_campaign_runs: []
-};
-```
-
----
-
-## ✅ Checklist for Frontend Developer
-
-### Setup Phase
-- [ ] Clone/receive this documentation
-- [ ] Install backend locally (or get access to dev server)
-- [ ] Download OpenAPI JSON from `/openapi.json`
-- [ ] Generate TypeScript types using `openapi-typescript`
-- [ ] Copy TypeScript enums from this document
-- [ ] Set up environment variables (API base URL)
-
-### Development Phase
-- [ ] Implement authentication service (login, OTP, token storage)
-- [ ] Create API client wrapper with auth headers
-- [ ] Build contact upload UI (CSV/XLSX)
-- [ ] Build contact list with pagination & filters
-- [ ] Build campaign creation form
-- [ ] Build campaign list & management UI
-- [ ] Build dashboard with analytics
-- [ ] Implement error handling
-- [ ] Add loading states
-- [ ] Test with mock data first
-- [ ] Integrate with live backend
-
-### PWA Requirements
-- [ ] Add manifest.json
-- [ ] Implement service worker
-- [ ] Add "Add to Home Screen" prompt
-- [ ] Optimize for mobile (touch targets, responsive)
-- [ ] Test on low-end Android devices
-- [ ] Implement offline fallback pages
-- [ ] Add loading indicators for slow networks
-
----
-
-## 🔗 Communication Points
-
-### What Frontend Dev Can Start Immediately
-1. ✅ Authentication UI (login, register, OTP)
-2. ✅ Contact list UI with pagination
-3. ✅ Campaign creation form
-4. ✅ Dashboard layout
-5. ✅ File upload component
-
-### What Requires Backend Coordination
-1. ⏳ WhatsApp Business Account setup UI (depends on WABA integration)
-2. ⏳ Real-time message status updates (needs WebSocket or polling strategy)
-3. ⏳ Template preview (needs actual WhatsApp template data)
-
-### Regular Sync Points
-- **Daily**: API changes, enum updates, validation rules
-- **Weekly**: New endpoints, schema changes, error handling patterns
-
----
-
-## 📞 Questions Frontend Dev Might Have
-
-**Q: How do I know if a user is admin vs jeweller?**  
-A: Decode the JWT token. Check `is_admin` and `jeweller_id` fields.
-
-**Q: How do I handle token refresh?**  
-A: Not implemented in MVP. For now, redirect to login on 401. Post-MVP: implement refresh token flow.
-
-**Q: Can I use the Swagger UI for testing?**  
-A: Yes! Go to `http://localhost:8000/docs`, click "Authorize", paste your token, and test all endpoints interactively.
-
-**Q: What's the CSV format for contact upload?**  
-A: Required columns: `phone_number`, `segment`, `preferred_language`. Optional: `name`, `customer_id`, `notes`, `tags`. See example in `/contacts/upload` docs.
-
-**Q: How do I handle file size limits?**  
-A: Not enforced yet in backend. Recommend client-side limit of 10MB or 10,000 rows.
-
-**Q: What date/time format should I use?**  
-A: Send dates as `YYYY-MM-DD`, times as `HH:MM:SS` (24-hour), datetimes as ISO 8601 strings.
-
----
-
-## 🎁 Bonus: Example API Client
-
-```typescript
-// src/services/api-client.ts
-import { AuthService } from './auth';
-
 class ApiClient {
   private baseUrl: string;
-  private authService: AuthService;
 
-  constructor(baseUrl: string, authService: AuthService) {
+  constructor(baseUrl: string = 'http://localhost:8000') {
     this.baseUrl = baseUrl;
-    this.authService = authService;
   }
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`;
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-        ...this.authService.getAuthHeader()
-      }
-    });
+  private getToken(): string | null {
+    return localStorage.getItem('access_token');
+  }
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      throw new Error(error.detail);
+  private getHeaders(): HeadersInit {
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    const token = this.getToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
+    return headers;
+  }
 
-    if (response.status === 204) {
-      return null as T;
+  async get<T>(endpoint: string, params?: Record<string, any>): Promise<T> {
+    const url = new URL(`${this.baseUrl}${endpoint}`);
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) url.searchParams.append(key, String(value));
+      });
     }
-
+    const response = await fetch(url.toString(), { headers: this.getHeaders() });
+    if (!response.ok) throw await response.json();
     return response.json();
   }
 
-  // Contacts
-  async getContacts(params?: { page?: number; segment?: string }) {
-    const query = new URLSearchParams(params as any).toString();
-    return this.request<ContactListResponse>(`/contacts/?${query}`);
-  }
-
-  async createContact(data: ContactCreate) {
-    return this.request<ContactResponse>('/contacts/', {
+  async post<T>(endpoint: string, body?: unknown): Promise<T> {
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
       method: 'POST',
-      body: JSON.stringify(data)
+      headers: this.getHeaders(),
+      body: body ? JSON.stringify(body) : undefined,
     });
+    if (!response.ok) throw await response.json();
+    if (response.status === 204) return undefined as T;
+    return response.json();
   }
 
-  async uploadContacts(file: File) {
+  async patch<T>(endpoint: string, body: unknown): Promise<T> {
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      method: 'PATCH',
+      headers: this.getHeaders(),
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw await response.json();
+    return response.json();
+  }
+
+  async delete(endpoint: string): Promise<void> {
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      method: 'DELETE',
+      headers: this.getHeaders(),
+    });
+    if (!response.ok) throw await response.json();
+  }
+
+  async uploadFile<T>(endpoint: string, file: File): Promise<T> {
     const formData = new FormData();
     formData.append('file', file);
+    const headers: HeadersInit = {};
+    const token = this.getToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
     
-    const response = await fetch(`${this.baseUrl}/contacts/upload`, {
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
       method: 'POST',
-      headers: this.authService.getAuthHeader(),
-      body: formData
+      headers,
+      body: formData,
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail);
-    }
-
-    return response.json() as Promise<ContactImportReport>;
-  }
-
-  // Campaigns
-  async getCampaigns(params?: { page?: number; status_filter?: string }) {
-    const query = new URLSearchParams(params as any).toString();
-    return this.request<CampaignListResponse>(`/campaigns/?${query}`);
-  }
-
-  async createCampaign(data: CampaignCreate) {
-    return this.request<CampaignResponse>('/campaigns/', {
-      method: 'POST',
-      body: JSON.stringify(data)
-    });
-  }
-
-  async pauseCampaign(id: number) {
-    return this.request<CampaignResponse>(`/campaigns/${id}/pause`, {
-      method: 'POST'
-    });
-  }
-
-  // Dashboard
-  async getDashboard() {
-    return this.request<JewellerDashboardResponse>('/analytics/dashboard');
+    if (!response.ok) throw await response.json();
+    return response.json();
   }
 }
 
-export default ApiClient;
+export const api = new ApiClient();
 ```
 
 ---
 
-## 📚 Additional Resources
+## ✅ Frontend Developer Checklist
 
-- **FastAPI Docs**: https://fastapi.tiangolo.com/
-- **OpenAPI Spec**: https://swagger.io/specification/
-- **WhatsApp Cloud API**: https://developers.facebook.com/docs/whatsapp/cloud-api/
-- **PWA Guidelines**: https://web.dev/progressive-web-apps/
+### Setup
+- [ ] Download OpenAPI spec from `/openapi.json`
+- [ ] Copy TypeScript types from this document
+- [ ] Set up API client with auth headers
+- [ ] Configure environment variables
+
+### Authentication
+- [ ] Implement phone login form
+- [ ] Implement WhatsApp OTP flow
+- [ ] Store tokens securely
+- [ ] Handle token expiration (401)
+
+### Features
+- [ ] Contact upload (CSV/XLSX)
+- [ ] Contact list with pagination
+- [ ] Campaign creation wizard
+- [ ] Campaign management (activate/pause)
+- [ ] Dashboard with analytics
+
+### PWA
+- [ ] Add manifest.json
+- [ ] Implement service worker
+- [ ] Offline fallback page
+- [ ] Mobile-responsive design
 
 ---
 
-**Last Updated**: January 24, 2026  
-**Backend Version**: 1.0.0  
-**Contact**: Backend Developer (You!)
+**Last Updated**: February 5, 2026  
+**Backend Version**: 1.1.0  
+**API Docs**: http://localhost:8000/docs

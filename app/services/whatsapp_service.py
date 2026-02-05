@@ -1,21 +1,25 @@
 """
-WhatsApp Service using PyWa Library
+WhatsApp Service using PyWa Library (v3.8.0+)
 Handles messaging, template management, and webhook processing
+Uses pywa_async for async support with FastAPI
 """
 import logging
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
-from enum import Enum
+
+import httpx
 
 try:
-    from pywa import WhatsApp
-    from pywa.types import Template as PyWaTemplate
+    from pywa_async import WhatsApp
+    from pywa_async.types import TemplateLanguage, BodyText, HeaderText
     from pywa.errors import WhatsAppError
     PYWA_AVAILABLE = True
 except ImportError:
     PYWA_AVAILABLE = False
     WhatsApp = None
-    PyWaTemplate = None
+    TemplateLanguage = None
+    BodyText = None
+    HeaderText = None
     WhatsAppError = Exception
 
 from app.config import settings
@@ -53,14 +57,61 @@ class TemplateResult:
     error: Optional[str] = None
 
 
+# Language code to TemplateLanguage mapping for pywa 3.8.0
+LANGUAGE_CODE_MAP = {
+    "en": "ENGLISH",
+    "en_US": "ENGLISH_US",
+    "en_GB": "ENGLISH_UK",
+    "hi": "HINDI",
+    "kn": "KANNADA",
+    "ta": "TAMIL",
+    "te": "TELUGU",
+    "mr": "MARATHI",
+    "gu": "GUJARATI",
+    "bn": "BENGALI",
+    "ml": "MALAYALAM",
+    "pa": "PUNJABI",
+    "or": "ODIA",
+    "as": "ASSAMESE",
+    "ur": "URDU",
+}
+
+
+def get_template_language(language_code: str) -> Optional[Any]:
+    """
+    Convert language code to pywa TemplateLanguage enum
+    
+    Args:
+        language_code: ISO language code (en, hi, kn, etc.)
+        
+    Returns:
+        TemplateLanguage enum value or None
+    """
+    if not PYWA_AVAILABLE or TemplateLanguage is None:
+        return None
+    
+    # Try direct mapping first
+    lang_name = LANGUAGE_CODE_MAP.get(language_code)
+    if lang_name and hasattr(TemplateLanguage, lang_name):
+        return getattr(TemplateLanguage, lang_name)
+    
+    # Try uppercase version
+    if hasattr(TemplateLanguage, language_code.upper()):
+        return getattr(TemplateLanguage, language_code.upper())
+    
+    # Default to English US
+    return TemplateLanguage.ENGLISH_US
+
+
 class WhatsAppService:
     """
-    WhatsApp Cloud API Service using PyWa library
+    WhatsApp Cloud API Service using PyWa library (v3.8.0+)
     Provides messaging, template management, and status tracking
+    Uses pywa_async for async operations
     """
     
     _instance: Optional['WhatsAppService'] = None
-    _client = None  # WhatsApp client instance
+    _client: Optional[Any] = None
     
     def __new__(cls):
         """Singleton pattern for WhatsApp client"""
@@ -74,7 +125,7 @@ class WhatsAppService:
             self._initialize_client()
     
     def _initialize_client(self) -> None:
-        """Initialize the PyWa WhatsApp client"""
+        """Initialize the PyWa async WhatsApp client"""
         if not PYWA_AVAILABLE:
             logger.warning("PyWa library not available. Running in development mode.")
             self._client = None
@@ -86,13 +137,13 @@ class WhatsAppService:
             return
         
         try:
+            # pywa 3.8.0 uses pywa_async.WhatsApp for async operations
             self._client = WhatsApp(
                 phone_id=settings.WHATSAPP_PHONE_NUMBER_ID,
                 token=settings.WHATSAPP_ACCESS_TOKEN,
                 business_account_id=settings.WHATSAPP_BUSINESS_ACCOUNT_ID or None,
-                api_version=settings.WHATSAPP_API_VERSION,
             )
-            logger.info("WhatsApp client initialized successfully")
+            logger.info("WhatsApp async client initialized successfully (pywa 3.8.0)")
         except Exception as e:
             logger.error(f"Failed to initialize WhatsApp client: {e}")
             self._client = None
@@ -114,7 +165,7 @@ class WhatsAppService:
         button_params: Optional[List[Dict[str, str]]] = None,
     ) -> MessageResult:
         """
-        Send a template message to a phone number
+        Send a template message to a phone number using pywa 3.8.0 API
         
         Args:
             phone_number: E.164 format phone number
@@ -137,38 +188,46 @@ class WhatsAppService:
             )
         
         try:
-            # Build template for pywa
-            # Create body values
-            body_values = []
-            if body_params:
-                for param in body_params:
-                    body_values.append(PyWaTemplate.TextValue(value=param))
+            # Get the TemplateLanguage enum for pywa 3.8.0
+            template_language = get_template_language(language_code)
             
-            # Create header values
-            header_values = None
-            if header_params:
-                header_values = []
-                for param in header_params:
-                    header_values.append(PyWaTemplate.TextValue(value=param))
+            # Build params list for pywa 3.8.0 send_template
+            # In pywa 3.x, we pass params as a list of BaseParams objects
+            params = []
             
-            # Create template object
-            template = PyWaTemplate(
-                name=template_name,
-                language=PyWaTemplate.Language(code=language_code),
-                body=body_values if body_values else None,
-                header=header_values,
-            )
+            # Add header params if provided
+            if header_params and HeaderText:
+                # Create a dict for header parameters
+                header_kwargs = {}
+                for i, param in enumerate(header_params):
+                    header_kwargs[f"var{i+1}"] = param
+                if header_kwargs:
+                    params.append(HeaderText.params(**header_kwargs))
             
-            # Send the template message
-            response = self._client.send_template(
+            # Add body params if provided
+            if body_params and BodyText:
+                # Create a dict for body parameters
+                body_kwargs = {}
+                for i, param in enumerate(body_params):
+                    body_kwargs[f"var{i+1}"] = param
+                if body_kwargs:
+                    params.append(BodyText.params(**body_kwargs))
+            
+            # Send the template message using pywa 3.8.0 async API
+            response = await self._client.send_template(
                 to=phone_number,
-                template=template,
+                name=template_name,
+                language=template_language,
+                params=params if params else None,
             )
+            
+            # In pywa 3.x, response is a SentTemplate object with .id attribute
+            message_id = response.id if hasattr(response, 'id') else str(response)
             
             logger.info(f"Template message sent successfully to {phone_number}")
             return MessageResult(
                 success=True,
-                message_id=response.id if hasattr(response, 'id') else str(response),
+                message_id=message_id,
                 phone_number=phone_number,
             )
             
@@ -214,16 +273,20 @@ class WhatsAppService:
             )
         
         try:
-            response = self._client.send_message(
+            # pywa 3.x send_message with keyword-only args
+            response = await self._client.send_message(
                 to=phone_number,
                 text=text,
                 preview_url=preview_url,
             )
             
+            # In pywa 3.x, response is a SentMessage object
+            message_id = response.id if hasattr(response, 'id') else str(response)
+            
             logger.info(f"Text message sent successfully to {phone_number}")
             return MessageResult(
                 success=True,
-                message_id=response.id if hasattr(response, 'id') else str(response),
+                message_id=message_id,
                 phone_number=phone_number,
             )
             
@@ -271,16 +334,19 @@ class WhatsAppService:
             )
         
         try:
-            response = self._client.send_image(
+            # pywa 3.x send_image with keyword-only args
+            response = await self._client.send_image(
                 to=phone_number,
                 image=image_url or image_id,
                 caption=caption,
             )
             
+            message_id = response.id if hasattr(response, 'id') else str(response)
+            
             logger.info(f"Image message sent successfully to {phone_number}")
             return MessageResult(
                 success=True,
-                message_id=response.id if hasattr(response, 'id') else str(response),
+                message_id=message_id,
                 phone_number=phone_number,
             )
             
@@ -330,17 +396,20 @@ class WhatsAppService:
             )
         
         try:
-            response = self._client.send_document(
+            # pywa 3.x send_document with keyword-only args
+            response = await self._client.send_document(
                 to=phone_number,
                 document=document_url or document_id,
                 filename=filename,
                 caption=caption,
             )
             
+            message_id = response.id if hasattr(response, 'id') else str(response)
+            
             logger.info(f"Document message sent successfully to {phone_number}")
             return MessageResult(
                 success=True,
-                message_id=response.id if hasattr(response, 'id') else str(response),
+                message_id=message_id,
                 phone_number=phone_number,
             )
             
@@ -445,10 +514,24 @@ class WhatsAppService:
             return []
         
         try:
-            import httpx
+            # Use pywa 3.x get_templates if available, otherwise use direct API
+            if hasattr(self._client, 'get_templates'):
+                templates_result = await self._client.get_templates()
+                template_list = []
+                for template in templates_result:
+                    template_dict = {
+                        "id": template.id if hasattr(template, 'id') else None,
+                        "name": template.name if hasattr(template, 'name') else None,
+                        "status": template.status.value if hasattr(template, 'status') else None,
+                        "category": template.category.value if hasattr(template, 'category') else None,
+                        "language": template.language.value if hasattr(template, 'language') else None,
+                        "components": template.components if hasattr(template, 'components') else [],
+                    }
+                    template_list.append(template_dict)
+                return template_list
             
-            # API endpoint for fetching templates
-            url = f"https://graph.facebook.com/{settings.WHATSAPP_API_VERSION}/{settings.WHATSAPP_BUSINESS_ACCOUNT_ID}/message_templates"
+            # Fallback to direct API call
+            url = f"https://graph.facebook.com/v21.0/{settings.WHATSAPP_BUSINESS_ACCOUNT_ID}/message_templates"
             
             headers = {
                 "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
@@ -552,8 +635,6 @@ class WhatsAppService:
             )
         
         try:
-            import httpx
-            
             # Build components list for WhatsApp API
             components = []
             
@@ -592,7 +673,7 @@ class WhatsAppService:
                 })
             
             # API endpoint for template creation
-            url = f"https://graph.facebook.com/{settings.WHATSAPP_API_VERSION}/{settings.WHATSAPP_BUSINESS_ACCOUNT_ID}/message_templates"
+            url = f"https://graph.facebook.com/v21.0/{settings.WHATSAPP_BUSINESS_ACCOUNT_ID}/message_templates"
             
             headers = {
                 "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
@@ -663,10 +744,17 @@ class WhatsAppService:
             )
         
         try:
-            import httpx
+            # Use pywa 3.x delete_template if available
+            if hasattr(self._client, 'delete_template'):
+                await self._client.delete_template(template_name=template_name)
+                logger.info(f"Template deleted successfully: {template_name}")
+                return TemplateResult(
+                    success=True,
+                    template_name=template_name,
+                )
             
-            # API endpoint for template deletion
-            url = f"https://graph.facebook.com/{settings.WHATSAPP_API_VERSION}/{settings.WHATSAPP_BUSINESS_ACCOUNT_ID}/message_templates"
+            # Fallback to direct API call
+            url = f"https://graph.facebook.com/v21.0/{settings.WHATSAPP_BUSINESS_ACCOUNT_ID}/message_templates"
             
             headers = {
                 "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
@@ -739,7 +827,7 @@ class WhatsAppService:
             return True
         
         try:
-            self._client.mark_message_as_read(message_id=message_id)
+            await self._client.mark_message_as_read(message_id=message_id)
             return True
         except Exception as e:
             logger.error(f"Error marking message as read: {e}")

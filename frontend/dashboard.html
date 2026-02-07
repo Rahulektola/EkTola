@@ -1130,13 +1130,26 @@
         date: document.getElementById('contactDate').value
       };
 
-      console.log('Adding contact:', contactData);
-      
-      // TODO: Implement API call to add contact
-      alert('Contact added successfully! (API integration pending)');
-      closeAddOneModal();
-      // Reload dashboard to show updated count
-      loadDashboard();
+      try {
+        const response = await fetch('http://localhost:8000/contacts/add-one', {
+          method: 'POST',
+          headers: authService.getAuthHeaders(),
+          body: JSON.stringify(contactData)
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || 'Failed to add contact');
+        }
+
+        const result = await response.json();
+        alert(`Contact "${result.name}" added successfully!`);
+        closeAddOneModal();
+        loadDashboard();
+      } catch (error) {
+        console.error('Error adding contact:', error);
+        alert(error.message || 'Failed to add contact. Please try again.');
+      }
     }
 
     // Modal Functions - Bulk Upload
@@ -1185,16 +1198,54 @@
         return;
       }
 
-      console.log('Uploading file:', selectedFile.name);
-      
-      // TODO: Implement API call to upload file
       const formData = new FormData();
       formData.append('file', selectedFile);
-      
-      alert('File uploaded successfully! (API integration pending)');
-      closeBulkUploadModal();
-      // Reload dashboard to show updated count
-      loadDashboard();
+
+      try {
+        const uploadBtn = document.getElementById('uploadBtn');
+        uploadBtn.disabled = true;
+        uploadBtn.textContent = 'Uploading...';
+
+        const response = await fetch('http://localhost:8000/contacts/bulk-upload-dashboard', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authService.accessToken}`
+          },
+          body: formData
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || 'Upload failed');
+        }
+
+        const result = await response.json();
+        
+        // Show detailed results
+        let message = `Upload completed!\n\n`;
+        message += `Total rows: ${result.total_rows}\n`;
+        message += `✓ Imported: ${result.imported}\n`;
+        message += `↻ Updated: ${result.updated}\n`;
+        message += `✗ Failed: ${result.failed}\n`;
+        
+        if (result.failed > 0 && result.failure_details.length > 0) {
+          message += `\nFirst few failures:\n`;
+          result.failure_details.slice(0, 3).forEach(f => {
+            message += `Row ${f.row}: ${f.name} - ${f.reason}\n`;
+          });
+        }
+        
+        alert(message);
+        closeBulkUploadModal();
+        loadDashboard();
+      } catch (error) {
+        console.error('Error uploading file:', error);
+        alert(error.message || 'Failed to upload contacts. Please try again.');
+      } finally {
+        const uploadBtn = document.getElementById('uploadBtn');
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = 'Upload Contacts';
+      }
     }
 
     // Drag and drop functionality

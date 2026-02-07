@@ -8,14 +8,209 @@ from app.models.jeweller import Jeweller
 from app.models.contact import Contact
 from app.schemas.contact import (
     ContactCreate, ContactUpdate, ContactResponse,
-    ContactListResponse, ContactImportReport, ContactSegmentStats
+    ContactListResponse, ContactImportReport, ContactSegmentStats,
+    DashboardContactCreate, DashboardContactResponse, DashboardBulkUploadReport
 )
 from app.utils.enums import SegmentType, Language
+from app.utils.whatsapp import normalize_phone_number, validate_phone_number
 import pandas as pd
 import io
 from datetime import datetime
 
 router = APIRouter(prefix="/contacts", tags=["Contacts"])
+
+
+# ============ Dashboard-Compatible Endpoints ============
+
+@router.post("/add-one", response_model=DashboardContactResponse, status_code=status.HTTP_201_CREATED)
+def add_one_contact(
+    request: DashboardContactCreate,
+    current_jeweller: Jeweller = Depends(get_current_jeweller),
+    db: Session = Depends(get_db)
+):
+    """
+    Add single contact from dashboard (simplified format)
+    Accepts: name, mobile, purpose (SIP/LOAN/BOTH), date
+    """
+    # Normalize and validate phone number
+    normalized_mobile = normalize_phone_number(request.mobile)
+    if not validate_phone_number(normalized_mobile):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid mobile number format. Use 10 digits or +91 format"
+        )
+    
+    # Check if contact exists
+    existing = db.query(Contact).filter(
+        Contact.jeweller_id == current_jeweller.id,
+        Contact.phone_number == normalized_mobile
+    ).first()
+    
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Contact with this mobile number already exists"
+        )
+    
+    # Map purpose to segment
+    purpose_to_segment = {
+        "SIP": SegmentType.MARKETING,
+        "LOAN": SegmentType.GOLD_LOAN,
+        "BOTH": SegmentType.MARKETING  # Default to marketing for dual purpose
+    }
+    
+    segment = purpose_to_segment.get(request.purpose, SegmentType.MARKETING)
+    
+    # Create contact
+    new_contact = Contact(
+        jeweller_id=current_jeweller.id,
+        phone_number=normalized_mobile,
+        name=request.name,
+        segment=segment,
+        preferred_language=Language.ENGLISH,  # Default
+        notes=f"Purpose: {request.purpose}, Date: {request.date}"
+    )
+    db.add(new_contact)
+    db.commit()
+    db.refresh(new_contact)
+    
+    # Return dashboard format
+    return DashboardContactResponse(
+        id=new_contact.id,
+        name=new_contact.name,
+        mobile=new_contact.phone_number,
+        purpose=request.purpose,
+        date=request.date,
+        created_at=new_contact.created_at
+    )
+
+
+@router.post("/bulk-upload-dashboard", response_model=DashboardBulkUploadReport)
+async def bulk_upload_dashboard(
+    file: UploadFile = File(...),
+    current_jeweller: Jeweller = Depends(get_current_jeweller),
+    db: Session = Depends(get_db)
+):
+    """
+    Bulk upload contacts from dashboard
+    Expected columns: Name, Mobile, Purpose, Date
+    Purpose can be: SIP, LOAN, or BOTH
+    """
+    if not file.filename.endswith(('.csv', '.xlsx', '.xls')):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only CSV and Excel files are supported"
+        )
+    
+    # Read file
+    contents = await file.read()
+    try:
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(contents))
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to read file: {str(e)}"
+        )
+    
+    # Normalize column names (case-insensitive)
+    df.columns = df.columns.str.strip().str.lower()
+    
+    # Check for required columns
+    required_columns = ['name', 'mobile', 'purpose']
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    if missing_columns:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Missing required columns: {', '.join(missing_columns)}. Expected: Name, Mobile, Purpose, Date"
+        )
+    
+    total_rows = len(df)
+    imported = 0
+    updated = 0
+    failed = 0
+    failure_details = []
+    
+    # Map purpose to segment
+    purpose_to_segment = {
+        "SIP": SegmentType.MARKETING,
+        "LOAN": SegmentType.GOLD_LOAN,
+        "BOTH": SegmentType.MARKETING
+    }
+    
+    for idx, row in df.iterrows():
+        try:
+            # Get values
+            name = str(row.get('name', '')).strip()
+            mobile = str(row.get('mobile', '')).strip()
+            purpose = str(row.get('purpose', '')).strip().upper()
+            date_val = str(row.get('date', '')) if 'date' in df.columns else ''
+            
+            # Validate
+            if not mobile or not name:
+                raise ValueError("Name and mobile are required")
+            
+            if purpose not in ['SIP', 'LOAN', 'BOTH']:
+                raise ValueError(f"Invalid purpose: {purpose}. Must be SIP, LOAN, or BOTH")
+            
+            # Normalize phone number
+            normalized_mobile = normalize_phone_number(mobile)
+            if not validate_phone_number(normalized_mobile):
+                raise ValueError(f"Invalid mobile number format: {mobile}")
+            
+            # Map to segment
+            segment = purpose_to_segment.get(purpose, SegmentType.MARKETING)
+            
+            # Check if contact exists
+            existing = db.query(Contact).filter(
+                Contact.jeweller_id == current_jeweller.id,
+                Contact.phone_number == normalized_mobile
+            ).first()
+            
+            if existing:
+                # Update existing contact
+                existing.name = name
+                existing.segment = segment
+                existing.notes = f"Purpose: {purpose}, Date: {date_val}"
+                existing.updated_at = datetime.utcnow()
+                updated += 1
+            else:
+                # Create new contact
+                new_contact = Contact(
+                    jeweller_id=current_jeweller.id,
+                    phone_number=normalized_mobile,
+                    name=name,
+                    segment=segment,
+                    preferred_language=Language.ENGLISH,
+                    notes=f"Purpose: {purpose}, Date: {date_val}"
+                )
+                db.add(new_contact)
+                imported += 1
+        
+        except Exception as e:
+            failed += 1
+            failure_details.append({
+                "row": idx + 2,  # Excel row number (1-indexed + header)
+                "name": str(row.get('name', 'N/A')),
+                "mobile": str(row.get('mobile', 'N/A')),
+                "reason": str(e)
+            })
+    
+    db.commit()
+    
+    return DashboardBulkUploadReport(
+        total_rows=total_rows,
+        imported=imported,
+        updated=updated,
+        failed=failed,
+        failure_details=failure_details,
+        message=f"Successfully imported {imported} contacts, updated {updated}, failed {failed}"
+    )
+
+
+# ============ Original Advanced Endpoints ============
 
 
 @router.post("/upload", response_model=ContactImportReport)

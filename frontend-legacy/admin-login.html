@@ -17,124 +17,82 @@
   <link rel="icon" type="image/png" href="/favicon.png">
   <link rel="apple-touch-icon" href="/icon-192.png">
   
-  <title>Admin Registration - ekTola</title>
+  <title>Admin Login - ekTola</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
   <div class="container">
-    <!-- Registration Card -->
+    <!-- Login Card -->
     <div class="auth-card">
       <!-- Logo/Header -->
       <div class="auth-header">
         <h1 class="app-title">ekTola</h1>
         <p class="app-subtitle">Admin Control Panel</p>
-        <div class="user-type-badge admin">Admin Registration</div>
+        <div class="user-type-badge admin">Admin Login</div>
       </div>
 
-      <!-- Admin Registration Form -->
-      <form id="adminRegisterForm" class="auth-form active">
+      <!-- Admin Login Form (Password Only) -->
+      <form id="adminLoginForm" class="auth-form active">
         <div class="form-group">
-          <label for="adminRegisterEmail" class="form-label">Admin Email</label>
+          <label for="adminEmail" class="form-label">Admin Email</label>
           <input 
             type="email" 
-            id="adminRegisterEmail" 
-            name="adminRegisterEmail" 
+            id="adminEmail" 
+            name="adminEmail" 
             class="form-input" 
-            placeholder="Enter admin email"
+            placeholder="Enter your admin email"
             required
             autocomplete="email"
           >
-          <span class="form-error" id="adminRegisterEmailError"></span>
+          <span class="form-error" id="adminEmailError"></span>
         </div>
 
         <div class="form-group">
-          <label for="adminRegisterPassword" class="form-label">Password</label>
+          <label for="adminPassword" class="form-label">Password</label>
           <div class="password-input-wrapper">
             <input 
               type="password" 
-              id="adminRegisterPassword" 
-              name="adminRegisterPassword" 
+              id="adminPassword" 
+              name="adminPassword" 
               class="form-input" 
-              placeholder="Create a password"
+              placeholder="Enter your password"
               required
-              autocomplete="new-password"
+              autocomplete="current-password"
             >
             <button 
               type="button" 
               class="password-toggle" 
-              id="adminRegisterPasswordToggle"
+              id="adminPasswordToggle"
               aria-label="Toggle password visibility"
             >
-              <svg class="icon" id="adminRegisterEyeIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg class="icon" id="adminEyeIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                 <circle cx="12" cy="12" r="3"></circle>
               </svg>
             </button>
           </div>
-          <span class="form-error" id="adminRegisterPasswordError"></span>
+          <span class="form-error" id="adminPasswordError"></span>
         </div>
 
-        <div class="form-group">
-          <label for="adminConfirmPassword" class="form-label">Confirm Password</label>
-          <div class="password-input-wrapper">
-            <input 
-              type="password" 
-              id="adminConfirmPassword" 
-              name="adminConfirmPassword" 
-              class="form-input" 
-              placeholder="Confirm your password"
-              required
-              autocomplete="new-password"
-            >
-            <button 
-              type="button" 
-              class="password-toggle" 
-              id="adminConfirmPasswordToggle"
-              aria-label="Toggle password visibility"
-            >
-              <svg class="icon" id="adminConfirmEyeIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                <circle cx="12" cy="12" r="3"></circle>
-              </svg>
-            </button>
-          </div>
-          <span class="form-error" id="adminConfirmPasswordError"></span>
+        <div class="form-options">
+          <label class="checkbox-label">
+            <input type="checkbox" id="adminRememberMe" name="adminRememberMe">
+            <span>Remember me</span>
+          </label>
         </div>
 
-        <div class="form-group">
-          <label for="adminAccessCode" class="form-label">Admin Access Code</label>
-          <input 
-            type="text" 
-            id="adminAccessCode" 
-            name="adminAccessCode" 
-            class="form-input" 
-            placeholder="Enter admin access code"
-            required
-          >
-          <span class="form-error" id="adminAccessCodeError"></span>
-        </div>
+        <div class="form-error-message" id="adminFormError"></div>
 
-        <div class="info-message warning">
-          <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-            <line x1="12" y1="9" x2="12" y2="13"></line>
-            <line x1="12" y1="17" x2="12.01" y2="17"></line>
-          </svg>
-          <span>Admin registration requires a valid access code. Contact system administrator.</span>
-        </div>
-
-        <div class="form-error-message" id="adminRegisterFormError"></div>
-
-        <button type="submit" class="btn btn-primary btn-admin" id="adminRegisterButton">
-          <span class="btn-text">Create Admin Account</span>
-          <span class="btn-loader" id="adminRegisterLoader"></span>
+        <button type="submit" class="btn btn-primary btn-admin" id="adminLoginButton">
+          <span class="btn-text">Login as Admin</span>
+          <span class="btn-loader" id="adminLoginLoader"></span>
         </button>
       </form>
 
       <!-- Footer -->
       <div class="auth-footer">
-        <p>Already have an account? <a href="/admin-login.html" class="link-text">Sign in</a></p>
-        <p class="switch-login-type">Not an admin? <a href="/register.html" class="link-text">Register as Jeweller</a></p>
+        <p>Don't have an account? <a href="/admin-register.html" class="link-text">Sign up</a></p>
+        <p class="switch-login-type">Not an admin? <a href="/index.html" class="link-text">Sign in as Jeweller</a></p>
       </div>
     </div>
 
@@ -144,7 +102,7 @@
         <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
         <polyline points="22 4 12 14.01 9 11.01"></polyline>
       </svg>
-      <p id="successMessageText">Admin registration successful!</p>
+      <p id="successMessageText">Login successful! Redirecting...</p>
     </div>
   </div>
 
@@ -163,7 +121,8 @@
   </div>
 
   <!-- Scripts -->
-  <script type="module" src="/js/admin-register.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/admin-login.js"></script>
   <script>
     // Register service worker
     if ('serviceWorker' in navigator) {

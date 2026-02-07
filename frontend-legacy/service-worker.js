@@ -2,8 +2,8 @@
  * Service Worker for ekTola PWA
  * Handles offline caching and background sync
  */
-const CACHE_NAME = 'ektola-v3';
-const RUNTIME_CACHE = 'ektola-runtime-v3';
+const CACHE_NAME = 'ektola-v1';
+const RUNTIME_CACHE = 'ektola-runtime-v1';
 
 // Assets to cache on install
 const PRECACHE_URLS = [
@@ -12,7 +12,6 @@ const PRECACHE_URLS = [
   '/admin-login.html',
   '/register.html',
   '/admin-register.html',
-  '/dashboard.html',
   '/css/style.css',
   '/js/auth.js',
   '/js/login.js',

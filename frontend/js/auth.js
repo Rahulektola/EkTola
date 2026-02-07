@@ -2,331 +2,241 @@
  * Authentication Service
  * Handles JWT token management and authentication operations
  */
-class AuthService {
-  constructor(baseURL = 'http://localhost:8000') {
-    this.baseURL = baseURL;
-    this.accessToken = null;
-    this.refreshToken = null;
-    
-    // Load tokens from localStorage on initialization
-    this.loadTokens();
-  }
-
-  /**
-   * Load tokens from localStorage
-   */
-  loadTokens() {
-    this.accessToken = localStorage.getItem('access_token');
-    this.refreshToken = localStorage.getItem('refresh_token');
-  }
-
-  /**
-   * Store tokens in localStorage
-   */
-  storeTokens(accessToken, refreshToken) {
-    this.accessToken = accessToken;
-    this.refreshToken = refreshToken;
-    localStorage.setItem('access_token', accessToken);
-    localStorage.setItem('refresh_token', refreshToken);
-  }
-
-  /**
-   * Login with email and password (Admin)
-   * @param {string} email - User email
-   * @param {string} password - User password
-   * @returns {Promise<Object>} Token response
-   */
-  async login(email, password) {
-    try {
-      const response = await fetch(`${this.baseURL}/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Login failed');
-      }
-
-      const data = await response.json();
-      this.storeTokens(data.access_token, data.refresh_token);
-      
-      return data;
-    } catch (error) {
-      throw error;
+export class AuthService {
+    constructor(baseURL = 'http://localhost:8000') {
+        this.accessToken = null;
+        this.refreshToken = null;
+        this.baseURL = baseURL;
+        this.loadTokens();
     }
-  }
-
-  /**
-   * Login with phone number and password (Jeweller)
-   * @param {string} phoneNumber - User phone number
-   * @param {string} password - User password
-   * @returns {Promise<Object>} Token response
-   */
-  async loginWithPhone(phoneNumber, password) {
-    try {
-      const response = await fetch(`${this.baseURL}/auth/login/phone`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ phone_number: phoneNumber, password }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Login failed');
-      }
-
-      const data = await response.json();
-      this.storeTokens(data.access_token, data.refresh_token);
-      
-      return data;
-    } catch (error) {
-      throw error;
+    /**
+     * Load tokens from localStorage
+     */
+    loadTokens() {
+        this.accessToken = localStorage.getItem('access_token');
+        this.refreshToken = localStorage.getItem('refresh_token');
     }
-  }
-
-  /**
-   * Register new user account
-   * @param {Object} userData - User registration data
-   * @returns {Promise<Object>} Token response
-   */
-  async register(userData) {
-    try {
-      const response = await fetch(`${this.baseURL}/auth/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(userData),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Registration failed');
-      }
-
-      const data = await response.json();
-      this.storeTokens(data.access_token, data.refresh_token);
-      
-      return data;
-    } catch (error) {
-      throw error;
+    /**
+     * Store tokens in localStorage
+     */
+    storeTokens(accessToken, refreshToken) {
+        this.accessToken = accessToken;
+        this.refreshToken = refreshToken;
+        localStorage.setItem('access_token', accessToken);
+        localStorage.setItem('refresh_token', refreshToken);
     }
-  }
-
-  /**
-   * Request OTP for email (Admin)
-   * @param {string} email - User email
-   * @returns {Promise<Object>} Response message
-   */
-  async requestOTP(email) {
-    try {
-      const response = await fetch(`${this.baseURL}/auth/otp/request`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'OTP request failed');
-      }
-
-      return await response.json();
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  /**
-   * Request OTP via WhatsApp (Jeweller)
-   * @param {string} phoneNumber - User phone number
-   * @returns {Promise<Object>} Response message
-   */
-  async requestPhoneOTP(phoneNumber) {
-    try {
-      const response = await fetch(`${this.baseURL}/auth/otp/request/phone`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ phone_number: phoneNumber }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'OTP request failed');
-      }
-
-      return await response.json();
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  /**
-   * Verify OTP and login (Email - Admin)
-   * @param {string} email - User email
-   * @param {string} otp_code - OTP code
-   * @returns {Promise<Object>} Token response
-   */
-  async verifyOTP(email, otp_code) {
-    try {
-      const response = await fetch(`${this.baseURL}/auth/otp/verify`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, otp_code }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'OTP verification failed');
-      }
-
-      const data = await response.json();
-      this.storeTokens(data.access_token, data.refresh_token);
-      
-      return data;
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  /**
-   * Verify WhatsApp OTP and login (Jeweller)
-   * @param {string} phoneNumber - User phone number
-   * @param {string} otp_code - OTP code
-   * @returns {Promise<Object>} Token response
-   */
-  async verifyPhoneOTP(phoneNumber, otp_code) {
-    try {
-      const response = await fetch(`${this.baseURL}/auth/otp/verify/phone`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ phone_number: phoneNumber, otp_code }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'OTP verification failed');
-      }
-
-      const data = await response.json();
-      this.storeTokens(data.access_token, data.refresh_token);
-      
-      return data;
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  /**
-   * Get current user profile
-   * @returns {Promise<Object>} User profile
-   */
-  async getCurrentUser() {
-    try {
-      const response = await fetch(`${this.baseURL}/auth/me`, {
-        method: 'GET',
-        headers: this.getAuthHeaders(),
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          this.logout();
-          throw new Error('Session expired. Please login again.');
+    async parseError(response, fallbackMessage) {
+        try {
+            const error = (await response.json());
+            if (error && typeof error.detail === 'string') {
+                return error.detail;
+            }
         }
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to fetch user profile');
-      }
-
-      return await response.json();
-    } catch (error) {
-      throw error;
+        catch {
+            // Ignore JSON parse errors
+        }
+        return fallbackMessage;
     }
-  }
-
-  /**
-   * Get authentication headers with Bearer token
-   * @returns {Object} Headers object
-   */
-  getAuthHeaders() {
-    const headers = {
-      'Content-Type': 'application/json',
-    };
-    
-    if (this.accessToken) {
-      headers['Authorization'] = `Bearer ${this.accessToken}`;
+    /**
+     * Login with email and password (Admin)
+     */
+    async login(email, password) {
+        const response = await fetch(`${this.baseURL}/auth/login`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email, password }),
+        });
+        if (!response.ok) {
+            const message = await this.parseError(response, 'Login failed');
+            throw new Error(message);
+        }
+        const data = (await response.json());
+        this.storeTokens(data.access_token, data.refresh_token);
+        return data;
     }
-    
-    return headers;
-  }
-
-  /**
-   * Check if user is authenticated
-   * @returns {boolean} Authentication status
-   */
-  isAuthenticated() {
-    return !!this.accessToken;
-  }
-
-  /**
-   * Logout user and clear tokens
-   */
-  logout() {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    this.accessToken = null;
-    this.refreshToken = null;
-  }
-
-  /**
-   * Decode JWT token (without verification)
-   * @param {string} token - JWT token
-   * @returns {Object} Decoded payload
-   */
-  decodeToken(token) {
-    try {
-      const base64Url = token.split('.')[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(
-        atob(base64)
-          .split('')
-          .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-          .join('')
-      );
-      return JSON.parse(jsonPayload);
-    } catch (error) {
-      return null;
+    /**
+     * Login with phone number and password (Jeweller)
+     */
+    async loginWithPhone(phoneNumber, password) {
+        const response = await fetch(`${this.baseURL}/auth/login/phone`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ phone_number: phoneNumber, password }),
+        });
+        if (!response.ok) {
+            const message = await this.parseError(response, 'Login failed');
+            throw new Error(message);
+        }
+        const data = (await response.json());
+        this.storeTokens(data.access_token, data.refresh_token);
+        return data;
     }
-  }
-
-  /**
-   * Check if token is expired
-   * @param {string} token - JWT token
-   * @returns {boolean} Expiration status
-   */
-  isTokenExpired(token) {
-    const decoded = this.decodeToken(token);
-    if (!decoded || !decoded.exp) return true;
-    
-    const currentTime = Date.now() / 1000;
-    return decoded.exp < currentTime;
-  }
+    /**
+     * Register new user account
+     */
+    async register(userData) {
+        const response = await fetch(`${this.baseURL}/auth/register`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(userData),
+        });
+        if (!response.ok) {
+            const message = await this.parseError(response, 'Registration failed');
+            throw new Error(message);
+        }
+        const data = (await response.json());
+        this.storeTokens(data.access_token, data.refresh_token);
+        return data;
+    }
+    /**
+     * Request OTP for email (Admin)
+     */
+    async requestOTP(email) {
+        const response = await fetch(`${this.baseURL}/auth/otp/request`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email }),
+        });
+        if (!response.ok) {
+            const message = await this.parseError(response, 'OTP request failed');
+            throw new Error(message);
+        }
+        return (await response.json());
+    }
+    /**
+     * Request OTP via WhatsApp (Jeweller)
+     */
+    async requestPhoneOTP(phoneNumber) {
+        const response = await fetch(`${this.baseURL}/auth/otp/request/phone`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ phone_number: phoneNumber }),
+        });
+        if (!response.ok) {
+            const message = await this.parseError(response, 'OTP request failed');
+            throw new Error(message);
+        }
+        return (await response.json());
+    }
+    /**
+     * Verify OTP and login (Email - Admin)
+     */
+    async verifyOTP(email, otp_code) {
+        const response = await fetch(`${this.baseURL}/auth/otp/verify`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email, otp_code }),
+        });
+        if (!response.ok) {
+            const message = await this.parseError(response, 'OTP verification failed');
+            throw new Error(message);
+        }
+        const data = (await response.json());
+        this.storeTokens(data.access_token, data.refresh_token);
+        return data;
+    }
+    /**
+     * Verify WhatsApp OTP and login (Jeweller)
+     */
+    async verifyPhoneOTP(phoneNumber, otp_code) {
+        const response = await fetch(`${this.baseURL}/auth/otp/verify/phone`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ phone_number: phoneNumber, otp_code }),
+        });
+        if (!response.ok) {
+            const message = await this.parseError(response, 'OTP verification failed');
+            throw new Error(message);
+        }
+        const data = (await response.json());
+        this.storeTokens(data.access_token, data.refresh_token);
+        return data;
+    }
+    /**
+     * Get current user profile
+     */
+    async getCurrentUser() {
+        const response = await fetch(`${this.baseURL}/auth/me`, {
+            method: 'GET',
+            headers: this.getAuthHeaders(),
+        });
+        if (!response.ok) {
+            if (response.status === 401) {
+                this.logout();
+                throw new Error('Session expired. Please login again.');
+            }
+            const message = await this.parseError(response, 'Failed to fetch user profile');
+            throw new Error(message);
+        }
+        return (await response.json());
+    }
+    /**
+     * Get authentication headers with Bearer token
+     */
+    getAuthHeaders() {
+        const headers = {
+            'Content-Type': 'application/json',
+        };
+        if (this.accessToken) {
+            headers['Authorization'] = `Bearer ${this.accessToken}`;
+        }
+        return headers;
+    }
+    /**
+     * Check if user is authenticated
+     */
+    isAuthenticated() {
+        return !!this.accessToken;
+    }
+    /**
+     * Logout user and clear tokens
+     */
+    logout() {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        this.accessToken = null;
+        this.refreshToken = null;
+    }
+    /**
+     * Decode JWT token (without verification)
+     */
+    decodeToken(token) {
+        try {
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(atob(base64)
+                .split('')
+                .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                .join(''));
+            return JSON.parse(jsonPayload);
+        }
+        catch {
+            return null;
+        }
+    }
+    /**
+     * Check if token is expired
+     */
+    isTokenExpired(token) {
+        const decoded = this.decodeToken(token);
+        if (!decoded || typeof decoded.exp !== 'number')
+            return true;
+        const currentTime = Date.now() / 1000;
+        return decoded.exp < currentTime;
+    }
 }
-
-// Export for use in other files
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = AuthService;
-}
+//# sourceMappingURL=auth.js.map

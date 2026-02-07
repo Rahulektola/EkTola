@@ -268,3 +268,6 @@ service-account.json
 thumbcache_*
 __pycache__/
 .__pycache__/
+
+dist/
+node_modules/

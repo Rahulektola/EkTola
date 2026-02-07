@@ -291,3 +291,7 @@ export class AuthService {
     return decoded.exp < currentTime;
   }
 }
+
+// Make AuthService globally available
+(window as any).AuthService = AuthService;
+(window as any).authService = new AuthService();

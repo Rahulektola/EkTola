@@ -239,4 +239,7 @@ export class AuthService {
         return decoded.exp < currentTime;
     }
 }
+// Make AuthService globally available
+window.AuthService = AuthService;
+window.authService = new AuthService();
 //# sourceMappingURL=auth.js.map

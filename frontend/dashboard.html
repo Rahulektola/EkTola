@@ -5,6 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#6366f1">
   <title>Dashboard - ekTola Jeweller</title>
+  
+  <!-- Unregister service worker temporarily for testing -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for(let registration of registrations) {
+          registration.unregister();
+          console.log('Service Worker unregistered');
+        }
+      });
+    }
+  </script>
+  
   <link rel="stylesheet" href="/css/style.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -115,6 +128,24 @@
 
     .btn-primary:hover {
       background: #4f46e5;
+    }
+
+    .btn-success {
+      background: var(--success-color);
+      color: white;
+    }
+
+    .btn-success:hover {
+      background: #059669;
+    }
+
+    .btn-danger {
+      background: var(--danger-color);
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #dc2626;
     }
 
     /* Dashboard Container */
@@ -374,7 +405,7 @@
     /* Quick Actions */
     .quick-actions {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(3, 1fr);
       gap: 16px;
     }
 
@@ -391,6 +422,7 @@
     .action-card:hover {
       border-color: var(--primary-color);
       background: #f9fafb;
+      transform: translateY(-2px);
     }
 
     .action-icon {
@@ -407,6 +439,226 @@
     .action-card p {
       font-size: 12px;
       color: var(--text-secondary);
+    }
+
+    /* Modal Styles */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal {
+      background: white;
+      border-radius: 16px;
+      max-width: 500px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+
+    .modal-header {
+      padding: 24px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-title {
+      font-size: 20px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: var(--text-secondary);
+      padding: 0;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+
+    .modal-close:hover {
+      background: var(--bg-light);
+      color: var(--text-color);
+    }
+
+    .modal-body {
+      padding: 24px;
+    }
+
+    .modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+
+    /* Form Styles */
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--text-color);
+    }
+
+    .form-label .required {
+      color: var(--danger-color);
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    .form-select {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      font-size: 14px;
+      background: white;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .form-select:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    .form-help {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+    }
+
+    .file-upload-area {
+      border: 2px dashed var(--border-color);
+      border-radius: 12px;
+      padding: 32px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: var(--bg-light);
+    }
+
+    .file-upload-area:hover {
+      border-color: var(--primary-color);
+      background: white;
+    }
+
+    .file-upload-area.dragover {
+      border-color: var(--primary-color);
+      background: #eef2ff;
+    }
+
+    .file-upload-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
+
+    .file-upload-text {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .file-upload-hint {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .file-selected {
+      display: none;
+      margin-top: 16px;
+      padding: 12px;
+      background: #ecfdf5;
+      border: 1px solid #6ee7b7;
+      border-radius: 8px;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .file-selected.show {
+      display: flex;
+    }
+
+    .file-selected-icon {
+      font-size: 24px;
+    }
+
+    .file-selected-info {
+      flex: 1;
+    }
+
+    .file-selected-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-color);
+    }
+
+    .file-selected-size {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .permission-content {
+      text-align: center;
+      padding: 20px 0;
+    }
+
+    .permission-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+
+    .permission-text {
+      font-size: 16px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+      margin-bottom: 24px;
     }
 
     .empty-state {
@@ -587,29 +839,130 @@
     <!-- Upload Options -->
     <div class="card">
       <div class="card-header">
-        <h2 class="card-title">📥 Upload Contacts (4 Ways)</h2>
+        <h2 class="card-title">📥 Add Contacts</h2>
       </div>
       <div class="quick-actions">
-        <div class="action-card" onclick="window.location.href='/contacts.html?mode=single'">
+        <div class="action-card" onclick="openAddOneModal()">
           <div class="action-icon">➕</div>
           <h3>Add One by One</h3>
           <p>Manually add individual contacts</p>
         </div>
-        <div class="action-card" onclick="window.location.href='/contacts.html?mode=bulk'">
+        <div class="action-card" onclick="openBulkUploadModal()">
           <div class="action-icon">📁</div>
-          <h3>Bulk Upload (CSV)</h3>
-          <p>Import multiple contacts at once</p>
+          <h3>Bulk Upload</h3>
+          <p>Upload Excel/CSV file</p>
         </div>
-        <div class="action-card" onclick="alert('Admin upload - contacts added by admin will appear automatically in your list')">
+        <div class="action-card" onclick="openAdminPermissionModal()">
           <div class="action-icon">👨‍💼</div>
           <h3>Admin Upload</h3>
-          <p>Admin adds contacts for you</p>
+          <p>Allow admin to add contacts</p>
         </div>
-        <div class="action-card" onclick="alert('Mobile contacts sync - coming soon! Download our mobile app')">
-          <div class="action-icon">📱</div>
-          <h3>Sync Mobile Contacts</h3>
-          <p>Link with your phone contacts</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add One by One Modal -->
+  <div class="modal-overlay" id="addOneModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">➕ Add Contact</h3>
+        <button class="modal-close" onclick="closeAddOneModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <form id="addContactForm">
+          <div class="form-group">
+            <label class="form-label">Name <span class="required">*</span></label>
+            <input type="text" class="form-input" id="contactName" placeholder="Enter full name" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Mobile Number <span class="required">*</span></label>
+            <input type="tel" class="form-input" id="contactMobile" placeholder="+91 9876543210" required>
+            <div class="form-help">Include country code (e.g., +91 for India)</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Purpose <span class="required">*</span></label>
+            <select class="form-select" id="contactPurpose" required>
+              <option value="">Select purpose</option>
+              <option value="SIP">SIP</option>
+              <option value="LOAN">Loan</option>
+              <option value="BOTH">Both (SIP & Loan)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Date <span class="required">*</span></label>
+            <input type="date" class="form-input" id="contactDate" required>
+            <div class="form-help">Date of contact or transaction</div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeAddOneModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitAddContact()">Add Contact</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk Upload Modal -->
+  <div class="modal-overlay" id="bulkUploadModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">📁 Bulk Upload Contacts</h3>
+        <button class="modal-close" onclick="closeBulkUploadModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display: none;" onchange="handleFileSelect(event)">
+        
+        <div class="file-upload-area" id="dropZone" onclick="document.getElementById('fileInput').click()">
+          <div class="file-upload-icon">📄</div>
+          <div class="file-upload-text">Click to upload or drag and drop</div>
+          <div class="file-upload-hint">Excel (.xlsx, .xls) or CSV files only</div>
         </div>
+
+        <div class="file-selected" id="fileSelected">
+          <div class="file-selected-icon">✅</div>
+          <div class="file-selected-info">
+            <div class="file-selected-name" id="fileName"></div>
+            <div class="file-selected-size" id="fileSize"></div>
+          </div>
+          <button class="btn btn-secondary" onclick="clearFile()">✕</button>
+        </div>
+
+        <div style="margin-top: 20px; padding: 16px; background: #eff6ff; border-radius: 8px; font-size: 13px;">
+          <strong>📝 File Format:</strong><br>
+          Your file should have columns: <strong>Name, Mobile, Purpose, Date</strong><br>
+          Purpose can be: SIP, LOAN, or BOTH
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeBulkUploadModal()">Cancel</button>
+        <button class="btn btn-primary" id="uploadBtn" onclick="submitBulkUpload()" disabled>Upload Contacts</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Permission Modal -->
+  <div class="modal-overlay" id="adminPermissionModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">👨‍💼 Admin Upload Permission</h3>
+        <button class="modal-close" onclick="closeAdminPermissionModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="permission-content">
+          <div class="permission-icon">🔐</div>
+          <div class="permission-text">
+            <strong>Do you want to allow the admin to upload contacts on your behalf?</strong><br><br>
+            By granting permission, the admin will be able to add contacts to your account. 
+            You can revoke this permission at any time from your account settings.
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeAdminPermissionModal()">Cancel</button>
+        <button class="btn btn-success" onclick="grantAdminPermission()">✓ Allow Admin Upload</button>
       </div>
     </div>
   </div>
@@ -617,6 +970,7 @@
   <script src="/js/auth.js"></script>
   <script>
     const authService = new AuthService();
+    let selectedFile = null;
 
     // Auth check
     if (!authService.isAuthenticated()) {
@@ -749,6 +1103,146 @@
         </div>
       `).join('');
     }
+
+    // Modal Functions - Add One by One
+    function openAddOneModal() {
+      document.getElementById('addOneModal').classList.add('active');
+      // Set today's date as default
+      document.getElementById('contactDate').valueAsDate = new Date();
+    }
+
+    function closeAddOneModal() {
+      document.getElementById('addOneModal').classList.remove('active');
+      document.getElementById('addContactForm').reset();
+    }
+
+    async function submitAddContact() {
+      const form = document.getElementById('addContactForm');
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+
+      const contactData = {
+        name: document.getElementById('contactName').value,
+        mobile: document.getElementById('contactMobile').value,
+        purpose: document.getElementById('contactPurpose').value,
+        date: document.getElementById('contactDate').value
+      };
+
+      console.log('Adding contact:', contactData);
+      
+      // TODO: Implement API call to add contact
+      alert('Contact added successfully! (API integration pending)');
+      closeAddOneModal();
+      // Reload dashboard to show updated count
+      loadDashboard();
+    }
+
+    // Modal Functions - Bulk Upload
+    function openBulkUploadModal() {
+      document.getElementById('bulkUploadModal').classList.add('active');
+    }
+
+    function closeBulkUploadModal() {
+      document.getElementById('bulkUploadModal').classList.remove('active');
+      clearFile();
+    }
+
+    function handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (file) {
+        const validTypes = ['text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+        if (!validTypes.includes(file.type) && !file.name.match(/\.(csv|xlsx|xls)$/i)) {
+          alert('Please select a valid CSV or Excel file');
+          return;
+        }
+
+        selectedFile = file;
+        document.getElementById('fileName').textContent = file.name;
+        document.getElementById('fileSize').textContent = formatFileSize(file.size);
+        document.getElementById('fileSelected').classList.add('show');
+        document.getElementById('uploadBtn').disabled = false;
+      }
+    }
+
+    function clearFile() {
+      selectedFile = null;
+      document.getElementById('fileInput').value = '';
+      document.getElementById('fileSelected').classList.remove('show');
+      document.getElementById('uploadBtn').disabled = true;
+    }
+
+    function formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    async function submitBulkUpload() {
+      if (!selectedFile) {
+        alert('Please select a file first');
+        return;
+      }
+
+      console.log('Uploading file:', selectedFile.name);
+      
+      // TODO: Implement API call to upload file
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      
+      alert('File uploaded successfully! (API integration pending)');
+      closeBulkUploadModal();
+      // Reload dashboard to show updated count
+      loadDashboard();
+    }
+
+    // Drag and drop functionality
+    const dropZone = document.getElementById('dropZone');
+    
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        document.getElementById('fileInput').files = files;
+        handleFileSelect({ target: { files } });
+      }
+    });
+
+    // Modal Functions - Admin Permission
+    function openAdminPermissionModal() {
+      document.getElementById('adminPermissionModal').classList.add('active');
+    }
+
+    function closeAdminPermissionModal() {
+      document.getElementById('adminPermissionModal').classList.remove('active');
+    }
+
+    async function grantAdminPermission() {
+      // TODO: Implement API call to grant permission
+      console.log('Granting admin upload permission');
+      alert('Admin upload permission granted! The admin can now upload contacts on your behalf.');
+      closeAdminPermissionModal();
+    }
+
+    // Close modals on outside click
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          overlay.classList.remove('active');
+        }
+      });
+    });
 
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', () => {

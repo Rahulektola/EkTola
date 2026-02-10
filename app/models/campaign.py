@@ -14,7 +14,7 @@ class Campaign(Base):
     template_id = Column(Integer, ForeignKey("templates.id"), nullable=False, index=True)
     
     # Campaign details
-    name = Column(String, nullable=False)
+    name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     
     # Campaign type and targeting
@@ -26,7 +26,7 @@ class Campaign(Base):
     start_date = Column(Date, nullable=False)
     start_time = Column(Time, nullable=False)
     end_date = Column(Date, nullable=True)
-    timezone = Column(String, default="Asia/Kolkata")
+    timezone = Column(String(50), default="Asia/Kolkata")
     
     # Status
     status = Column(SQLEnum(CampaignStatus), default=CampaignStatus.DRAFT, nullable=False, index=True)
@@ -66,7 +66,7 @@ class CampaignRun(Base):
     completed_at = Column(DateTime, nullable=True)
     
     # Run status
-    status = Column(String, default="PENDING")  # PENDING, RUNNING, COMPLETED, FAILED
+    status = Column(String(50), default="PENDING")  # PENDING, RUNNING, COMPLETED, FAILED
     
     # Audience snapshot at run time
     total_contacts = Column(Integer, default=0)

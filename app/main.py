@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 import asyncio
 import logging
 
-from app.routers import auth, contacts, campaigns, templates, analytics, webhooks
+from app.routers import auth, contacts, campaigns, templates, analytics, webhooks, admin
 from app.database import engine, Base
 from app.config import settings
 
@@ -81,6 +81,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth.router)
+app.include_router(admin.router)
 app.include_router(contacts.router)
 app.include_router(campaigns.router)
 app.include_router(templates.router)

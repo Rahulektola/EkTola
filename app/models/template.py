@@ -12,8 +12,8 @@ class Template(Base):
     id = Column(Integer, primary_key=True, index=True)
     
     # Template identification
-    template_name = Column(String, unique=True, nullable=False, index=True)
-    display_name = Column(String, nullable=False)
+    template_name = Column(String(255), unique=True, nullable=False, index=True)
+    display_name = Column(String(255), nullable=False)
     
     # Template categorization
     campaign_type = Column(SQLEnum(CampaignType), nullable=False, index=True)
@@ -21,7 +21,7 @@ class Template(Base):
     
     # Template metadata
     description = Column(Text, nullable=True)
-    category = Column(String, nullable=False)  # WhatsApp category: UTILITY, MARKETING, etc.
+    category = Column(String(50), nullable=False)  # WhatsApp category: UTILITY, MARKETING, etc.
     
     # Status
     is_active = Column(Boolean, default=True)
@@ -48,13 +48,13 @@ class TemplateTranslation(Base):
     
     # Language-specific content
     language = Column(SQLEnum(Language), nullable=False, index=True)
-    header_text = Column(String, nullable=True)
+    header_text = Column(String(255), nullable=True)
     body_text = Column(Text, nullable=False)
-    footer_text = Column(String, nullable=True)
+    footer_text = Column(String(255), nullable=True)
     
     # WhatsApp approval status
-    whatsapp_template_id = Column(String, nullable=True)  # From WhatsApp after approval
-    approval_status = Column(String, default="PENDING")  # PENDING, APPROVED, REJECTED
+    whatsapp_template_id = Column(String(255), nullable=True)  # From WhatsApp after approval
+    approval_status = Column(String(50), default="PENDING")  # PENDING, APPROVED, REJECTED
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

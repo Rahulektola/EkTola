@@ -11,14 +11,14 @@ class WebhookEvent(Base):
     jeweller_id = Column(Integer, ForeignKey("jewellers.id"), nullable=True, index=True)
     
     # Event identification
-    event_type = Column(String, nullable=False, index=True)  # message_status, message_received, etc.
-    whatsapp_message_id = Column(String, nullable=True, index=True)
+    event_type = Column(String(100), nullable=False, index=True)  # message_status, message_received, etc.
+    whatsapp_message_id = Column(String(255), nullable=True, index=True)
     
     # Raw webhook payload
     payload = Column(Text, nullable=False)  # JSON payload from WhatsApp
     
     # Processing status
-    processed = Column(String, default=False)
+    processed = Column(String(10), default=False)
     processed_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
     

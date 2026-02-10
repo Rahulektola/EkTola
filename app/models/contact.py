@@ -13,9 +13,9 @@ class Contact(Base):
     jeweller_id = Column(Integer, ForeignKey("jewellers.id"), nullable=False, index=True)
     
     # Contact information
-    phone_number = Column(String, nullable=False)  # E.164 format
-    name = Column(String, nullable=True)
-    customer_id = Column(String, nullable=True)
+    phone_number = Column(String(20), nullable=False)  # E.164 format
+    name = Column(String(255), nullable=True)
+    customer_id = Column(String(100), nullable=True)
     
     # Segmentation (MVP locked - one segment per contact)
     segment = Column(SQLEnum(SegmentType), nullable=False, index=True)

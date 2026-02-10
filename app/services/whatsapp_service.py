@@ -108,21 +108,32 @@ class WhatsAppService:
     WhatsApp Cloud API Service using PyWa library (v3.8.0+)
     Provides messaging, template management, and status tracking
     Uses pywa_async for async operations
+    
+    Supports both:
+    - Global mode: uses settings credentials (backward compat)
+    - Per-jeweller mode: uses jeweller-specific credentials via factory
     """
     
-    _instance: Optional['WhatsAppService'] = None
+    _global_instance: Optional['WhatsAppService'] = None
     _client: Optional[Any] = None
     
-    def __new__(cls):
-        """Singleton pattern for WhatsApp client"""
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
+    def __init__(self, phone_id: Optional[str] = None, token: Optional[str] = None, business_account_id: Optional[str] = None):
+        """
+        Initialize WhatsApp client.
+        If credentials provided, creates jeweller-specific client.
+        Otherwise uses global settings.
+        """
+        self._phone_id = phone_id
+        self._token = token
+        self._business_account_id = business_account_id
+        self._initialize_client()
     
-    def __init__(self):
-        """Initialize WhatsApp client if not already done"""
-        if self._client is None:
-            self._initialize_client()
+    @classmethod
+    def get_global_instance(cls) -> 'WhatsAppService':
+        """Get singleton global instance using settings credentials"""
+        if cls._global_instance is None:
+            cls._global_instance = cls()
+        return cls._global_instance
     
     def _initialize_client(self) -> None:
         """Initialize the PyWa async WhatsApp client"""
@@ -130,8 +141,13 @@ class WhatsAppService:
             logger.warning("PyWa library not available. Running in development mode.")
             self._client = None
             return
-            
-        if not settings.WHATSAPP_PHONE_NUMBER_ID or not settings.WHATSAPP_ACCESS_TOKEN:
+        
+        # Use provided credentials or fall back to global settings
+        phone_id = self._phone_id or settings.WHATSAPP_PHONE_NUMBER_ID
+        token = self._token or settings.WHATSAPP_ACCESS_TOKEN
+        biz_id = self._business_account_id or settings.WHATSAPP_BUSINESS_ACCOUNT_ID
+        
+        if not phone_id or not token:
             logger.warning("WhatsApp API credentials not configured. Running in development mode.")
             self._client = None
             return
@@ -139,9 +155,9 @@ class WhatsAppService:
         try:
             # pywa 3.8.0 uses pywa_async.WhatsApp for async operations
             self._client = WhatsApp(
-                phone_id=settings.WHATSAPP_PHONE_NUMBER_ID,
-                token=settings.WHATSAPP_ACCESS_TOKEN,
-                business_account_id=settings.WHATSAPP_BUSINESS_ACCOUNT_ID or None,
+                phone_id=phone_id,
+                token=token,
+                business_account_id=biz_id or None,
             )
             logger.info("WhatsApp async client initialized successfully (pywa 3.8.0)")
         except Exception as e:
@@ -794,8 +810,31 @@ class WhatsAppService:
             return False
 
 
-# Singleton instance
-whatsapp_service = WhatsAppService()
+# Global instance (backward compatible)
+whatsapp_service = WhatsAppService.get_global_instance()
+
+
+def get_whatsapp_client_for_jeweller(jeweller) -> WhatsAppService:
+    """
+    Factory function: create a WhatsAppService using a jeweller's own WABA credentials.
+    Falls back to global credentials if jeweller has none configured.
+    
+    Args:
+        jeweller: Jeweller model instance with waba fields
+        
+    Returns:
+        WhatsAppService configured with jeweller's credentials
+    """
+    if jeweller.access_token and jeweller.phone_number_id:
+        logger.info(f"Creating per-jeweller WhatsApp client for jeweller {jeweller.id}")
+        return WhatsAppService(
+            phone_id=jeweller.phone_number_id,
+            token=jeweller.access_token,
+            business_account_id=jeweller.waba_id,
+        )
+    else:
+        logger.info(f"Jeweller {jeweller.id} has no WABA credentials, using global client")
+        return whatsapp_service
 
 
 # ==================== CONVENIENCE FUNCTIONS ====================

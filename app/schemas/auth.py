@@ -10,6 +10,9 @@ class Token(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+    # Jeweller approval info (shown on login)
+    approval_status: Optional[str] = None  # PENDING, APPROVED, REJECTED
+    rejection_reason: Optional[str] = None  # Shown if rejected
 
 
 class TokenData(BaseModel):
@@ -76,13 +79,20 @@ class UserResponse(BaseModel):
 
 
 class JewellerResponse(BaseModel):
-    """Jeweller profile response"""
+    """Jeweller profile response (public - no admin_notes)"""
     id: int
     user_id: int
     business_name: str
+    owner_name: Optional[str] = None
     phone_number: str
+    address: Optional[str] = None
+    location: Optional[str] = None
     is_approved: bool
+    approval_status: Optional[str] = None
+    rejection_reason: Optional[str] = None
     is_active: bool
+    is_whatsapp_business: bool = False
+    meta_app_status: bool = False
     timezone: str
     waba_id: Optional[str] = None
     phone_number_id: Optional[str] = None

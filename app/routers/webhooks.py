@@ -4,6 +4,7 @@ from app.database import get_db
 from app.config import settings
 from app.models.webhook import WebhookEvent
 from app.models.message import Message
+from app.models.jeweller import Jeweller
 from app.utils.enums import MessageStatus
 from app.services.template_service import MessageService
 import json
@@ -89,6 +90,16 @@ async def whatsapp_webhook(
                         if change.get("field") == "messages":
                             value = change.get("value", {})
                             
+                            # Identify jeweller by phone_number_id from metadata
+                            metadata = value.get("metadata", {})
+                            display_phone_id = metadata.get("phone_number_id")
+                            if display_phone_id:
+                                jeweller = db.query(Jeweller).filter(
+                                    Jeweller.phone_number_id == display_phone_id
+                                ).first()
+                                if jeweller:
+                                    webhook_event.jeweller_id = jeweller.id
+                            
                             # Process status updates
                             if "statuses" in value:
                                 for status_update in value["statuses"]:
@@ -172,12 +183,18 @@ def whatsapp_webhook_verify(
     token = request.query_params.get("hub.verify_token")
     challenge = request.query_params.get("hub.challenge")
     
-    # Validate token against configured verify token
+    # Validate token against configured verify token or any jeweller's token
     expected_token = settings.WHATSAPP_WEBHOOK_VERIFY_TOKEN
     
     if mode == "subscribe" and challenge:
-        # In development, accept if no token configured
+        # Check global token first
         if not expected_token or token == expected_token:
+            return int(challenge)
+        # Check per-jeweller verify tokens
+        jeweller = db.query(Jeweller).filter(
+            Jeweller.webhook_verify_token == token
+        ).first()
+        if jeweller:
             return int(challenge)
     
     raise HTTPException(

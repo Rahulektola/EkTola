@@ -15,8 +15,9 @@ from app.models.campaign import Campaign, CampaignRun
 from app.models.message import Message
 from app.models.contact import Contact
 from app.models.template import Template
+from app.models.jeweller import Jeweller
 from app.utils.enums import CampaignStatus, MessageStatus, CampaignType, RecurrenceType
-from app.services.whatsapp import whatsapp_service
+from app.services.whatsapp_service import whatsapp_service, get_whatsapp_client_for_jeweller
 
 logger = logging.getLogger(__name__)
 
@@ -169,13 +170,17 @@ def send_campaign_message(self, message_id: int):
             db.commit()
             return
         
+        # Get jeweller for per-jeweller WABA credentials
+        jeweller = db.query(Jeweller).filter(Jeweller.id == campaign.jeweller_id).first()
+        wa_client = get_whatsapp_client_for_jeweller(jeweller) if jeweller else whatsapp_service
+        
         # Update message status
         message.status = MessageStatus.SENDING
         db.commit()
         
-        # Send message via WhatsApp
+        # Send message via WhatsApp using jeweller's credentials
         result = asyncio.run(
-            whatsapp_service.send_campaign_message(
+            wa_client.send_campaign_message(
                 contact=contact,
                 template=template,
                 language=campaign.language,

@@ -82,9 +82,12 @@ def get_current_jeweller(
         )
     
     if not jeweller.is_approved:
+        detail = "Jeweller account pending approval"
+        if jeweller.rejection_reason:
+            detail = f"Jeweller account rejected: {jeweller.rejection_reason}"
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Jeweller account pending approval"
+            detail=detail
         )
     
     if not jeweller.is_active:

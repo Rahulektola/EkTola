@@ -39,6 +39,13 @@ class RecurrenceType(str, Enum):
     ONE_TIME = "ONE_TIME"
 
 
+class ApprovalStatus(str, Enum):
+    """Jeweller approval workflow status"""
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+
 class Language(str, Enum):
     """Supported languages for messaging"""
     ENGLISH = "en"

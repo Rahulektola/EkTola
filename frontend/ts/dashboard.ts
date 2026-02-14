@@ -382,17 +382,16 @@ async function submitBulkUpload(): Promise<void> {
 
     const result = await response.json();
     
-    let message = `Upload completed!\n\n`;
-    message += `Total rows: ${result.total_rows}\n`;
-    message += `✓ Imported: ${result.imported}\n`;
-    message += `↻ Updated: ${result.updated}\n`;
-    message += `✗ Failed: ${result.failed}\n`;
+    // Simple success message
+    const totalAdded = result.imported + result.updated;
+    let message = `✅ ${totalAdded} contact${totalAdded !== 1 ? 's' : ''} added successfully!`;
     
-    if (result.failed > 0 && result.failure_details.length > 0) {
-      message += `\nFirst few failures:\n`;
-      result.failure_details.slice(0, 3).forEach((f: any) => {
-        message += `Row ${f.row}: ${f.name} - ${f.reason}\n`;
-      });
+    // Only show failures if any
+    if (result.failed > 0) {
+      message += `\n\n⚠️ ${result.failed} contact${result.failed !== 1 ? 's' : ''} could not be added.`;
+      if (result.failure_details && result.failure_details.length > 0) {
+        message += `\n\nFirst error: ${result.failure_details[0].name} - ${result.failure_details[0].reason}`;
+      }
     }
     
     alert(message);

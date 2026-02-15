@@ -65,8 +65,10 @@ def get_jeweller_dashboard(
     ).first()
     
     recent_total = recent_stats.total or 0
-    recent_delivery_rate = (recent_stats.delivered / recent_total * 100) if recent_total > 0 else 0
-    recent_read_rate = (recent_stats.read / recent_stats.delivered * 100) if recent_stats.delivered > 0 else 0
+    recent_delivered = recent_stats.delivered or 0
+    recent_read = recent_stats.read or 0
+    recent_delivery_rate = (recent_delivered / recent_total * 100) if recent_total > 0 else 0
+    recent_read_rate = (recent_read / recent_delivered * 100) if recent_delivered > 0 else 0
     
     # Contact distribution by segment
     contact_dist = db.query(

@@ -8,6 +8,7 @@ import { AuthService } from './auth.js';
 const authService = new AuthService();
 
 let adminRegisterForm: HTMLFormElement;
+let adminFullNameInput: HTMLInputElement;
 let adminRegisterEmailInput: HTMLInputElement;
 let adminRegisterPasswordInput: HTMLInputElement;
 let adminConfirmPasswordInput: HTMLInputElement;
@@ -35,6 +36,7 @@ function getRequiredElement<T extends HTMLElement>(id: string): T {
 
 function initializeElements(): void {
   adminRegisterForm = getRequiredElement<HTMLFormElement>('adminRegisterForm');
+  adminFullNameInput = getRequiredElement<HTMLInputElement>('adminFullName');
   adminRegisterEmailInput = getRequiredElement<HTMLInputElement>('adminRegisterEmail');
   adminRegisterPasswordInput = getRequiredElement<HTMLInputElement>('adminRegisterPassword');
   adminConfirmPasswordInput = getRequiredElement<HTMLInputElement>('adminConfirmPassword');
@@ -53,6 +55,7 @@ function setupEventListeners(): void {
   adminRegisterPasswordToggle.addEventListener('click', () => togglePassword('adminRegisterPassword', 'adminRegisterEyeIcon'));
   adminConfirmPasswordToggle.addEventListener('click', () => togglePassword('adminConfirmPassword', 'adminConfirmEyeIcon'));
 
+  adminFullNameInput.addEventListener('blur', () => validateRequired(adminFullNameInput, 'adminFullNameError', 'Full name'));
   adminRegisterEmailInput.addEventListener('blur', () => validateEmail(adminRegisterEmailInput, 'adminRegisterEmailError'));
   adminRegisterPasswordInput.addEventListener('blur', () => validatePassword(adminRegisterPasswordInput));
   adminConfirmPasswordInput.addEventListener('blur', () => validatePasswordMatch());
@@ -77,12 +80,14 @@ function checkExistingAuth(): void {
 async function handleAdminRegistration(e: Event): Promise<void> {
   e.preventDefault();
 
+  const fullName = adminFullNameInput.value.trim();
   const email = adminRegisterEmailInput.value.trim();
   const password = adminRegisterPasswordInput.value;
   const confirmPassword = adminConfirmPasswordInput.value;
   const accessCode = adminAccessCodeInput.value.trim();
 
   let isValid = true;
+  isValid = validateRequired(adminFullNameInput, 'adminFullNameError', 'Full name') && isValid;
   isValid = validateEmail(adminRegisterEmailInput, 'adminRegisterEmailError') && isValid;
   isValid = validatePassword(adminRegisterPasswordInput) && isValid;
   isValid = validatePasswordMatch() && isValid;
@@ -102,6 +107,7 @@ async function handleAdminRegistration(e: Event): Promise<void> {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
+        full_name: fullName,
         email: email,
         password: password,
         access_code: accessCode,
@@ -109,8 +115,21 @@ async function handleAdminRegistration(e: Event): Promise<void> {
     });
 
     if (!response.ok) {
-      const error = (await response.json()) as { detail?: string };
-      throw new Error(error.detail || 'Admin registration failed');
+      let errorMessage = 'Admin registration failed';
+      try {
+        const error = await response.json();
+        // Handle different error response formats
+        if (error.detail) {
+          if (typeof error.detail === 'string') {
+            errorMessage = error.detail;
+          } else if (typeof error.detail === 'object') {
+            errorMessage = error.detail.msg || JSON.stringify(error.detail);
+          }
+        }
+      } catch (parseError) {
+        errorMessage = `Registration failed with status ${response.status}`;
+      }
+      throw new Error(errorMessage);
     }
 
     const data = (await response.json()) as { access_token: string; refresh_token: string };
@@ -128,9 +147,19 @@ async function handleAdminRegistration(e: Event): Promise<void> {
       window.location.href = '/admin/dashboard.html';
     }, 2000);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Admin registration failed. Please check your access code.';
-    if (message.includes('fetch') || message.includes('NetworkError')) {
-      showError(adminRegisterFormError, 'Admin registration endpoint not available. Please contact system administrator.');
+    let message = 'Admin registration failed. Please check your access code.';
+    
+    if (error instanceof Error) {
+      message = error.message;
+    } else if (typeof error === 'string') {
+      message = error;
+    } else if (error && typeof error === 'object') {
+      // Handle case where error is an object - this is what's causing [object Object]
+      message = JSON.stringify(error);
+    }
+    
+    if (message.includes('fetch') || message.includes('NetworkError') || message.includes('Failed to fetch')) {
+      showError(adminRegisterFormError, 'Cannot connect to server. Please ensure the backend is running at http://localhost:8000');
     } else {
       showError(adminRegisterFormError, message);
     }

@@ -11,6 +11,6 @@
     "sourceMap": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["./ts/*.ts"],
+  "include": ["./ts/**/*.ts"],
   "exclude": ["./js", "./css"]
 }

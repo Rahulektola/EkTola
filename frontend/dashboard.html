@@ -37,6 +37,15 @@
       --bg-light: #f9fafb;
     }
 
+<body>
+    <!-- Impersonation Banner (shown only when admin is viewing as jeweller) -->
+    <div id="impersonation-banner" style="display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 10000; background: #dc2626; color: white; padding: 0.75rem 1rem; text-align: center; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <span id="impersonation-text">Viewing as Jeweller</span>
+        <button id="exit-impersonation" style="background: white; color: #dc2626; border: none; padding: 0.25rem 1rem; border-radius: 0.25rem; margin-left: 1rem; cursor: pointer; font-weight: 600;">
+            Exit Admin View
+        </button>
+    </div>
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       background: var(--bg-light);

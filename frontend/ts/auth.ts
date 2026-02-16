@@ -230,6 +230,71 @@ export class AuthService {
   }
 
   /**
+   * Impersonate a jeweller (admin only)
+   */
+  async impersonateJeweller(jewellerId: number): Promise<{ access_token: string; jeweller_name: string }> {
+    const response = await fetch(`${this.baseURL}/admin/impersonate/${jewellerId}`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      const message = await this.parseError(response, 'Impersonation failed');
+      throw new Error(message);
+    }
+
+    const data = (await response.json()) as { 
+      access_token: string; 
+      jeweller_id: number;
+      jeweller_name: string;
+      message: string;
+    };
+
+    // Store impersonation token in sessionStorage (separate from admin token)
+    sessionStorage.setItem('impersonation_token', data.access_token);
+    sessionStorage.setItem('impersonation_jeweller_id', jewellerId.toString());
+    sessionStorage.setItem('impersonation_jeweller_name', data.jeweller_name);
+
+    return { access_token: data.access_token, jeweller_name: data.jeweller_name };
+  }
+
+  /**
+   * Exit impersonation mode
+   */
+  exitImpersonation(): void {
+    sessionStorage.removeItem('impersonation_token');
+    sessionStorage.removeItem('impersonation_jeweller_id');
+    sessionStorage.removeItem('impersonation_jeweller_name');
+  }
+
+  /**
+   * Check if currently impersonating a jeweller
+   */
+  isImpersonating(): boolean {
+    return sessionStorage.getItem('impersonation_token') !== null;
+  }
+
+  /**
+   * Get impersonation token if active
+   */
+  getImpersonationToken(): string | null {
+    return sessionStorage.getItem('impersonation_token');
+  }
+
+  /**
+   * Get impersonated jeweller info
+   */
+  getImpersonatedJewellerInfo(): { id: number; name: string } | null {
+    const id = sessionStorage.getItem('impersonation_jeweller_id');
+    const name = sessionStorage.getItem('impersonation_jeweller_name');
+    
+    if (id && name) {
+      return { id: parseInt(id), name };
+    }
+    return null;
+  }
+
+  /**
    * Get authentication headers with Bearer token
    */
   getAuthHeaders(): HeadersInit {
@@ -237,8 +302,11 @@ export class AuthService {
       'Content-Type': 'application/json',
     };
 
-    if (this.accessToken) {
-      headers['Authorization'] = `Bearer ${this.accessToken}`;
+    // Use impersonation token if active, otherwise use admin token
+    const token = this.isImpersonating() ? this.getImpersonationToken() : this.accessToken;
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
 
     return headers;
@@ -259,6 +327,9 @@ export class AuthService {
     localStorage.removeItem('refresh_token');
     this.accessToken = null;
     this.refreshToken = null;
+    
+    // Also clear impersonation if active
+    this.exitImpersonation();
   }
 
   /**

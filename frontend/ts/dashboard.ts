@@ -465,6 +465,36 @@ document.getElementById('profileBtn')?.addEventListener('click', () => {
   alert('Profile page coming soon!');
 });
 
+// Impersonation Banner
+function setupImpersonationBanner(): void {
+  const banner = document.getElementById('impersonation-banner');
+  const exitBtn = document.getElementById('exit-impersonation');
+  const jewellerNameSpan = document.getElementById('impersonation-text');
+  
+  if (!banner || !exitBtn || !jewellerNameSpan) {
+    console.log('⚠️ Impersonation banner elements not found');
+    return;
+  }
+
+  if (window.authService.isImpersonating()) {
+    const jeweller = window.authService.getImpersonatedJewellerInfo();
+    console.log('👁️ Admin is impersonating:', jeweller);
+    
+    if (jeweller) {
+      jewellerNameSpan.textContent = `Viewing as ${jeweller.name}`;
+      banner.style.display = 'block';
+    }
+    
+    exitBtn.addEventListener('click', () => {
+      console.log('🚪 Exiting impersonation mode');
+      window.authService.exitImpersonation();
+      window.location.href = '/admin/dashboard.html';
+    });
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
 // Make functions globally available
 window.loadDashboard = loadDashboard;
 window.submitAddContact = submitAddContact;
@@ -479,5 +509,6 @@ window.openAdminPermissionModal = openAdminPermissionModal;
 window.closeAdminPermissionModal = closeAdminPermissionModal;
 window.grantAdminPermission = grantAdminPermission;
 
-// Load on page load
+// Initialize on page load
+setupImpersonationBanner();
 loadDashboard();

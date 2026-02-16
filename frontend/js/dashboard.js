@@ -372,6 +372,32 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
 (_b = document.getElementById('profileBtn')) === null || _b === void 0 ? void 0 : _b.addEventListener('click', () => {
     alert('Profile page coming soon!');
 });
+// Impersonation Banner
+function setupImpersonationBanner() {
+    const banner = document.getElementById('impersonation-banner');
+    const exitBtn = document.getElementById('exit-impersonation');
+    const jewellerNameSpan = document.getElementById('impersonation-text');
+    if (!banner || !exitBtn || !jewellerNameSpan) {
+        console.log('⚠️ Impersonation banner elements not found');
+        return;
+    }
+    if (window.authService.isImpersonating()) {
+        const jeweller = window.authService.getImpersonatedJewellerInfo();
+        console.log('👁️ Admin is impersonating:', jeweller);
+        if (jeweller) {
+            jewellerNameSpan.textContent = `Viewing as ${jeweller.name}`;
+            banner.style.display = 'block';
+        }
+        exitBtn.addEventListener('click', () => {
+            console.log('🚪 Exiting impersonation mode');
+            window.authService.exitImpersonation();
+            window.location.href = '/admin/dashboard.html';
+        });
+    }
+    else {
+        banner.style.display = 'none';
+    }
+}
 // Make functions globally available
 window.loadDashboard = loadDashboard;
 window.submitAddContact = submitAddContact;
@@ -385,7 +411,8 @@ window.submitBulkUpload = submitBulkUpload;
 window.openAdminPermissionModal = openAdminPermissionModal;
 window.closeAdminPermissionModal = closeAdminPermissionModal;
 window.grantAdminPermission = grantAdminPermission;
-// Load on page load
+// Initialize on page load
+setupImpersonationBanner();
 loadDashboard();
 export {};
 //# sourceMappingURL=dashboard.js.map

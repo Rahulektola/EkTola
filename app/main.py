@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 import asyncio
 import logging
 
-from app.routers import auth, contacts, campaigns, templates, analytics, webhooks
+from app.routers import admin, auth, contacts, campaigns, templates, analytics, webhooks
 from app.database import engine, Base
 from app.config import settings
 
@@ -45,19 +45,19 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("🎯 Starting EkTola API")
     
-    # Start campaign scheduler as background task
-    scheduler_task = asyncio.create_task(run_campaign_scheduler())
-    logger.info("📅 Campaign scheduler initialized")
+    # TODO: Start campaign scheduler as background task (requires celery)
+    # scheduler_task = asyncio.create_task(run_campaign_scheduler())
+    # logger.info("📅 Campaign scheduler initialized")
     
     yield  # Application runs
     
     # Shutdown
     logger.info("🛑 Shutting down EkTola API")
-    scheduler_task.cancel()
-    try:
-        await scheduler_task
-    except asyncio.CancelledError:
-        logger.info("✅ Scheduler stopped")
+    # scheduler_task.cancel()
+    # try:
+    #     await scheduler_task
+    # except asyncio.CancelledError:
+    #     logger.info("✅ Scheduler stopped")
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -80,6 +80,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(admin.router)
 app.include_router(auth.router)
 app.include_router(contacts.router)
 app.include_router(campaigns.router)

@@ -1,6 +1,13 @@
 from enum import Enum
 
 
+class ApprovalStatus(str, Enum):
+    """Jeweller approval status"""
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+
 class SegmentType(str, Enum):
     """Contact segment types - MVP locked"""
     GOLD_LOAN = "GOLD_LOAN"

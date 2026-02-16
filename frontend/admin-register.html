@@ -34,6 +34,20 @@
       <!-- Admin Registration Form -->
       <form id="adminRegisterForm" class="auth-form active">
         <div class="form-group">
+          <label for="adminFullName" class="form-label">Full Name</label>
+          <input 
+            type="text" 
+            id="adminFullName" 
+            name="adminFullName" 
+            class="form-input" 
+            placeholder="Enter your full name"
+            required
+            autocomplete="name"
+          >
+          <span class="form-error" id="adminFullNameError"></span>
+        </div>
+
+        <div class="form-group">
           <label for="adminRegisterEmail" class="form-label">Admin Email</label>
           <input 
             type="email" 

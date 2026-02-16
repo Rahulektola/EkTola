@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#dc2626">
+    <title>Jeweller Details - ekTola Admin</title>
+    <link rel="stylesheet" href="../css/style.css">
+    
+    <!-- Auth Service -->
+    <script type="module" src="../js/auth.js"></script>
+</head>
+<body class="admin-layout">
+    <!-- Navigation Sidebar -->
+    <div id="admin-nav-container"></div>
+
+    <!-- Main Content -->
+    <main class="admin-main">
+        <header class="admin-header">
+            <div>
+                <a href="/admin/jewellers.html" class="btn-back">← Back to List</a>
+                <h1 id="jeweller-name">Jeweller Details</h1>
+            </div>
+            <div class="header-actions">
+                <button id="btn-impersonate" class="btn btn-admin">Login As Jeweller</button>
+            </div>
+        </header>
+
+        <!-- Loading State -->
+        <div id="loading-state" class="loading-container" style="display: none;">
+            <div class="loading-spinner"></div>
+            <p>Loading jeweller details...</p>
+        </div>
+
+        <!-- Error State -->
+        <div id="error-state" class="error-container" style="display: none;">
+            <p class="error-message"></p>
+            <button class="btn btn-primary" onclick="location.reload()">Retry</button>
+        </div>
+
+        <!-- Content -->
+        <div id="content-container" style="display: none;">
+            <!-- Profile Card -->
+            <section class="admin-card">
+                <div class="card-header">
+                    <h2>Business Profile</h2>
+                    <div class="card-actions">
+                        <span id="approval-status-badge"></span>
+                        <button id="btn-edit-profile" class="btn btn-secondary btn-sm">Edit Profile</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <label>Business Name</label>
+                            <p id="profile-business-name">-</p>
+                        </div>
+                        <div class="info-item">
+                            <label>Owner Name</label>
+                            <p id="profile-owner-name">-</p>
+                        </div>
+                        <div class="info-item">
+                            <label>Phone Number</label>
+                            <p id="profile-phone">-</p>
+                        </div>
+                        <div class="info-item">
+                            <label>Email</label>
+                            <p id="profile-email">-</p>
+                        </div>
+                        <div class="info-item">
+                            <label>Address</label>
+                            <p id="profile-address">-</p>
+                        </div>
+                        <div class="info-item">
+                            <label>Location</label>
+                            <p id="profile-location">-</p>
+                        </div>
+                        <div class="info-item">
+                            <label>Timezone</label>
+                            <p id="profile-timezone">-</p>
+                        </div>
+                        <div class="info-item">
+                            <label>Created</label>
+                            <p id="profile-created">-</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Stats Summary -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-contacts">0</div>
+                    <div class="stat-label">Total Contacts</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-campaigns">0</div>
+                    <div class="stat-label">Total Campaigns</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-messages">0</div>
+                    <div class="stat-label">Total Messages</div>
+                </div>
+            </div>
+
+            <!-- Approval Actions (if pending) -->
+            <section id="approval-section" class="admin-card" style="display: none;">
+                <div class="card-header">
+                    <h2>Approval Actions</h2>
+                </div>
+                <div class="card-body">
+                    <div class="approval-actions">
+                        <button id="btn-approve" class="btn btn-success">✓ Approve Jeweller</button>
+                        <button id="btn-reject" class="btn btn-admin">✗ Reject Jeweller</button>
+                    </div>
+                    <div id="rejection-form" style="display: none; margin-top: 1rem;">
+                        <label for="rejection-reason">Rejection Reason (required, min 5 characters):</label>
+                        <textarea 
+                            id="rejection-reason" 
+                            class="form-input" 
+                            rows="3"
+                            placeholder="Provide a reason for rejection..."
+                        ></textarea>
+                        <div id="rejection-error" class="form-error"></div>
+                        <button id="btn-confirm-reject" class="btn btn-admin" style="margin-top: 0.5rem;">Confirm Rejection</button>
+                        <button id="btn-cancel-reject" class="btn btn-secondary" style="margin-top: 0.5rem;">Cancel</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- WhatsApp Integration -->
+            <section class="admin-card">
+                <div class="card-header">
+                    <h2>WhatsApp Business Integration</h2>
+                </div>
+                <div class="card-body">
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <label>WABA ID</label>
+                            <p id="meta-waba-id">-</p>
+                        </div>
+                        <div class="info-item">
+                            <label>Phone Number ID</label>
+                            <p id="meta-phone-id">-</p>
+                        </div>
+                        <div class="info-item">
+                            <label>WhatsApp Business</label>
+                            <p id="meta-is-whatsapp">-</p>
+                        </div>
+                        <div class="info-item">
+                            <label>Meta App Status</label>
+                            <p id="meta-app-status">-</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Admin Notes -->
+            <section class="admin-card">
+                <div class="card-header">
+                    <h2>Admin Notes</h2>
+                    <span class="note-hint">(Private, not visible to jeweller)</span>
+                </div>
+                <div class="card-body">
+                    <textarea 
+                        id="admin-notes" 
+                        class="form-input" 
+                        rows="4"
+                        placeholder="Add internal notes about this jeweller..."
+                    ></textarea>
+                    <p class="save-status" id="notes-save-status"></p>
+                </div>
+            </section>
+
+            <!-- Tabs for Contacts, Campaigns, Messages -->
+            <section class="admin-card">
+                <div class="card-tabs">
+                    <button class="tab-btn active" data-tab="contacts">Contacts</button>
+                    <button class="tab-btn" data-tab="campaigns">Campaigns</button>
+                    <button class="tab-btn" data-tab="messages">Messages</button>
+                </div>
+                <div class="card-body">
+                    <!-- Contacts Tab -->
+                    <div id="tab-contacts" class="tab-content active">
+                        <div class="tab-header">
+                            <button id="btn-upload-contacts" class="btn btn-primary">Upload Contacts (CSV/Excel)</button>
+                        </div>
+                        <div id="contacts-list">Loading contacts...</div>
+                    </div>
+
+                    <!-- Campaigns Tab -->
+                    <div id="tab-campaigns" class="tab-content">
+                        <div class="tab-header">
+                            <button id="btn-create-campaign" class="btn btn-primary">Create Campaign</button>
+                        </div>
+                        <div id="campaigns-list">Click to load campaigns</div>
+                    </div>
+
+                    <!-- Messages Tab -->
+                    <div id="tab-messages" class="tab-content">
+                        <div id="messages-list">Click to load messages</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Delete Jeweller (Danger Zone) -->
+            <section class="admin-card danger-zone">
+                <div class="card-header">
+                    <h2>Danger Zone</h2>
+                </div>
+                <div class="card-body">
+                    <p>Deleting this jeweller will permanently remove all associated data including contacts, campaigns, and messages. This action cannot be undone.</p>
+                    <button id="btn-delete-jeweller" class="btn btn-admin">Delete Jeweller</button>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Upload Modal -->
+    <div id="upload-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Upload Contacts</h3>
+                <button class="modal-close" onclick="document.getElementById('upload-modal').style.display='none'">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Upload a CSV or Excel file with columns: Name, Mobile, Purpose (SIP/LOAN/BOTH)</p>
+                <input type="file" id="file-input" class="form-input" accept=".csv,.xlsx,.xls">
+                <div id="upload-error" class="form-error"></div>
+                <div id="upload-results" style="display: none; margin-top: 1rem;"></div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-upload" class="btn btn-primary">Upload</button>
+                <button class="btn btn-secondary" onclick="document.getElementById('upload-modal').style.display='none'">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="../js/admin/jeweller-detail.js"></script>
+</body>
+</html>

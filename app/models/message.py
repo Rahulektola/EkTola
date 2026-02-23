@@ -15,13 +15,13 @@ class Message(Base):
     campaign_run_id = Column(Integer, ForeignKey("campaign_runs.id"), nullable=True, index=True)
     
     # Message content
-    phone_number = Column(String(20), nullable=False)  # Denormalized for quick access
-    template_name = Column(String(255), nullable=False)
+    phone_number = Column(String, nullable=False)  # Denormalized for quick access
+    template_name = Column(String, nullable=False)
     language = Column(SQLEnum(Language), nullable=False)
     message_body = Column(Text, nullable=False)  # Rendered message with variables filled
     
     # WhatsApp identifiers
-    whatsapp_message_id = Column(String(255), nullable=True, unique=True, index=True)
+    whatsapp_message_id = Column(String, nullable=True, unique=True, index=True)
     
     # Status tracking
     status = Column(SQLEnum(MessageStatus), default=MessageStatus.QUEUED, nullable=False, index=True)

@@ -65,26 +65,29 @@ def _build_jeweller_detail(db: Session, jeweller: Jeweller) -> JewellerDetailRes
     # Get user email
     user = db.query(User).filter(User.id == jeweller.user_id).first()
     email = user.email if user else None
+    
+    # Map is_approved boolean to ApprovalStatus enum
+    approval_status = ApprovalStatus.APPROVED if jeweller.is_approved else ApprovalStatus.PENDING
 
     return JewellerDetailResponse(
         id=jeweller.id,
         user_id=jeweller.user_id,
         business_name=jeweller.business_name,
-        owner_name=jeweller.owner_name,
+        owner_name=None,  # Not in current schema
         phone_number=jeweller.phone_number,
-        address=jeweller.address,
-        location=jeweller.location,
+        address=None,  # Not in current schema
+        location=None,  # Not in current schema
         waba_id=jeweller.waba_id,
         phone_number_id=jeweller.phone_number_id,
-        is_whatsapp_business=jeweller.is_whatsapp_business,
-        meta_app_status=jeweller.meta_app_status,
+        is_whatsapp_business=bool(jeweller.waba_id),  # Derive from waba_id
+        meta_app_status=bool(jeweller.waba_id),  # Derive from waba_id
         is_approved=jeweller.is_approved,
-        approval_status=jeweller.approval_status or ApprovalStatus.PENDING,
-        rejection_reason=jeweller.rejection_reason,
-        approved_at=jeweller.approved_at,
-        approved_by_user_id=jeweller.approved_by_user_id,
+        approval_status=approval_status,
+        rejection_reason=None,  # Not in current schema
+        approved_at=None,  # Not in current schema
+        approved_by_user_id=None,  # Not in current schema
         is_active=jeweller.is_active,
-        admin_notes=jeweller.admin_notes,
+        admin_notes=None,  # Not in current schema
         timezone=jeweller.timezone,
         created_at=jeweller.created_at,
         updated_at=jeweller.updated_at,
@@ -114,9 +117,13 @@ def list_jewellers(
     """
     query = db.query(Jeweller)
 
-    # Status filter
+    # Status filter (map enum to is_approved boolean)
     if status_filter:
-        query = query.filter(Jeweller.approval_status == status_filter)
+        if status_filter == ApprovalStatus.APPROVED:
+            query = query.filter(Jeweller.is_approved == True)
+        elif status_filter == ApprovalStatus.PENDING:
+            query = query.filter(Jeweller.is_approved == False)
+        # REJECTED not supported in current schema
 
     # Search
     if q:
@@ -125,20 +132,17 @@ def list_jewellers(
             or_(
                 Jeweller.business_name.ilike(search_term),
                 Jeweller.phone_number.ilike(search_term),
-                Jeweller.owner_name.ilike(search_term),
             )
         )
 
     # Status counts (unfiltered for badges)
     pending_count = db.query(func.count(Jeweller.id)).filter(
-        Jeweller.approval_status == ApprovalStatus.PENDING
+        Jeweller.is_approved == False
     ).scalar() or 0
     approved_count = db.query(func.count(Jeweller.id)).filter(
-        Jeweller.approval_status == ApprovalStatus.APPROVED
+        Jeweller.is_approved == True
     ).scalar() or 0
-    rejected_count = db.query(func.count(Jeweller.id)).filter(
-        Jeweller.approval_status == ApprovalStatus.REJECTED
-    ).scalar() or 0
+    rejected_count = 0  # Not supported in current schema
 
     # Sort
     sort_col = getattr(Jeweller, sort_by, Jeweller.created_at)
@@ -168,7 +172,7 @@ def get_pending_jewellers(
 ):
     """Get all jewellers pending approval (convenience endpoint)"""
     pending = db.query(Jeweller).filter(
-        Jeweller.approval_status == ApprovalStatus.PENDING
+        Jeweller.is_approved == False
     ).order_by(Jeweller.created_at.desc()).all()
 
     return JewellerListResponse(
@@ -264,21 +268,17 @@ def approve_jeweller(
 ):
     """
     Approve a jeweller account.
-    Sets approval_status to APPROVED, clears rejection_reason, records audit trail.
+    Sets is_approved to True.
     """
     jeweller = _get_jeweller_or_404(db, jeweller_id)
 
-    if jeweller.approval_status == ApprovalStatus.APPROVED:
+    if jeweller.is_approved:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Jeweller is already approved"
         )
 
     jeweller.is_approved = True
-    jeweller.approval_status = ApprovalStatus.APPROVED
-    jeweller.rejection_reason = None
-    jeweller.approved_at = datetime.utcnow()
-    jeweller.approved_by_user_id = current_admin.id
     jeweller.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(jeweller)
@@ -286,8 +286,8 @@ def approve_jeweller(
     return ApproveJewellerResponse(
         id=jeweller.id,
         business_name=jeweller.business_name,
-        approval_status=jeweller.approval_status,
-        approved_at=jeweller.approved_at,
+        approval_status=ApprovalStatus.APPROVED,
+        approved_at=jeweller.updated_at,
         message=f"Jeweller '{jeweller.business_name}' has been approved successfully.",
     )
 
@@ -301,15 +301,11 @@ def reject_jeweller(
 ):
     """
     Reject a jeweller account.
-    Requires a mandatory rejection_reason that is stored and shown to the jeweller.
+    Sets is_approved to False (rejection_reason not stored in current schema).
     """
     jeweller = _get_jeweller_or_404(db, jeweller_id)
 
     jeweller.is_approved = False
-    jeweller.approval_status = ApprovalStatus.REJECTED
-    jeweller.rejection_reason = request.rejection_reason
-    jeweller.approved_at = None
-    jeweller.approved_by_user_id = None
     jeweller.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(jeweller)
@@ -317,8 +313,8 @@ def reject_jeweller(
     return ApproveJewellerResponse(
         id=jeweller.id,
         business_name=jeweller.business_name,
-        approval_status=jeweller.approval_status,
-        rejection_reason=jeweller.rejection_reason,
+        approval_status=ApprovalStatus.REJECTED,
+        rejection_reason=request.rejection_reason,
         message=f"Jeweller '{jeweller.business_name}' has been rejected.",
     )
 

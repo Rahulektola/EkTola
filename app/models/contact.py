@@ -13,11 +13,11 @@ class Contact(Base):
     jeweller_id = Column(Integer, ForeignKey("jewellers.id"), nullable=False, index=True)
     
     # Contact information
-    phone_number = Column(String(20), nullable=False)  # E.164 format
+    phone_number = Column(String(50), nullable=False)
     name = Column(String(255), nullable=True)
     customer_id = Column(String(100), nullable=True)
     
-    # Segmentation (MVP locked - one segment per contact)
+    # Segmentation
     segment = Column(SQLEnum(SegmentType), nullable=False, index=True)
     
     # Language preference
@@ -29,7 +29,7 @@ class Contact(Base):
     
     # Metadata
     notes = Column(Text, nullable=True)
-    tags = Column(Text, nullable=True)  # JSON or comma-separated
+    tags = Column(Text, nullable=True)
     
     # Soft delete
     is_deleted = Column(Boolean, default=False, index=True)
@@ -43,7 +43,7 @@ class Contact(Base):
     jeweller = relationship("Jeweller", back_populates="contacts")
     messages = relationship("Message", back_populates="contact", cascade="all, delete-orphan")
     
-    # Composite unique constraint: phone_number unique per jeweller
+    # Composite unique constraint
     __table_args__ = (
         Index('idx_jeweller_phone', 'jeweller_id', 'phone_number', unique=True),
         Index('idx_jeweller_segment', 'jeweller_id', 'segment'),

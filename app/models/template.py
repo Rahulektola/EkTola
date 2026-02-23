@@ -21,7 +21,7 @@ class Template(Base):
     
     # Template metadata
     description = Column(Text, nullable=True)
-    category = Column(String(50), nullable=False)  # WhatsApp category: UTILITY, MARKETING, etc.
+    category = Column(String(100), nullable=False)  # WhatsApp category: UTILITY, MARKETING, etc.
     
     # Status
     is_active = Column(Boolean, default=True)
@@ -48,9 +48,9 @@ class TemplateTranslation(Base):
     
     # Language-specific content
     language = Column(SQLEnum(Language), nullable=False, index=True)
-    header_text = Column(String(255), nullable=True)
+    header_text = Column(String(500), nullable=True)
     body_text = Column(Text, nullable=False)
-    footer_text = Column(String(255), nullable=True)
+    footer_text = Column(String(500), nullable=True)
     
     # WhatsApp approval status
     whatsapp_template_id = Column(String(255), nullable=True)  # From WhatsApp after approval

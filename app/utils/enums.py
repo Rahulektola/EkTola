@@ -1,6 +1,13 @@
 from enum import Enum
 
 
+class ApprovalStatus(str, Enum):
+    """Jeweller approval status"""
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+
 class SegmentType(str, Enum):
     """Contact segment types - MVP locked"""
     GOLD_LOAN = "GOLD_LOAN"
@@ -37,13 +44,6 @@ class RecurrenceType(str, Enum):
     WEEKLY = "WEEKLY"
     MONTHLY = "MONTHLY"
     ONE_TIME = "ONE_TIME"
-
-
-class ApprovalStatus(str, Enum):
-    """Jeweller approval workflow status"""
-    PENDING = "PENDING"
-    APPROVED = "APPROVED"
-    REJECTED = "REJECTED"
 
 
 class Language(str, Enum):

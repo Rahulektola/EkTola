@@ -160,19 +160,7 @@ def login(
     access_token = create_access_token(token_data)
     refresh_token = create_refresh_token(token_data)
     
-    # Include approval status for jewellers
-    approval_status = None
-    rejection_reason = None
-    if jeweller:
-        approval_status = jeweller.approval_status.value if jeweller.approval_status else ("APPROVED" if jeweller.is_approved else "PENDING")
-        rejection_reason = jeweller.rejection_reason
-    
-    return Token(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        approval_status=approval_status,
-        rejection_reason=rejection_reason,
-    )
+    return Token(access_token=access_token, refresh_token=refresh_token)
 
 
 @router.post("/login/phone", response_model=Token)
@@ -213,19 +201,7 @@ def login_with_phone(
     access_token = create_access_token(token_data)
     refresh_token = create_refresh_token(token_data)
     
-    # Include approval status for jewellers
-    approval_status = None
-    rejection_reason = None
-    if jeweller:
-        approval_status = jeweller.approval_status.value if jeweller.approval_status else ("APPROVED" if jeweller.is_approved else "PENDING")
-        rejection_reason = jeweller.rejection_reason
-    
-    return Token(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        approval_status=approval_status,
-        rejection_reason=rejection_reason,
-    )
+    return Token(access_token=access_token, refresh_token=refresh_token)
 
 
 @router.post("/otp/request")

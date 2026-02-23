@@ -9,13 +9,13 @@ class User(Base):
     __tablename__ = "users"
     
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String(255), unique=True, nullable=True, index=True)  # Optional for jewellers, required for admins
-    phone_number = Column(String(20), unique=True, nullable=True, index=True)  # Primary identifier for jewellers
-    hashed_password = Column(String(255), nullable=True)  # Nullable for OTP-only auth
+    email = Column(String(255), unique=True, nullable=True, index=True)
+    phone_number = Column(String(50), unique=True, nullable=True, index=True)
+    hashed_password = Column(String(255), nullable=True)
     is_active = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)
     
-    # OTP fields for phone verification
+    # OTP fields
     phone_otp_code = Column(String(10), nullable=True)
     phone_otp_expiry = Column(DateTime, nullable=True)
     
@@ -23,5 +23,5 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
-    # Relationship to jeweller (one-to-one)
+    # Relationship
     jeweller = relationship("Jeweller", back_populates="user", uselist=False)

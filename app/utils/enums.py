@@ -51,6 +51,7 @@ class Language(str, Enum):
     ENGLISH = "en"
     HINDI = "hi"
     KANNADA = "kn"
+    MARATHI = "mr"
     TAMIL = "ta"
     PUNJABI = "pa"
     

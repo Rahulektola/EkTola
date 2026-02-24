@@ -13,6 +13,7 @@ celery_app = Celery(
     backend=settings.REDIS_URL,
     include=[
         'app.tasks.campaign_tasks',  # Import campaign tasks
+        'app.tasks.token_refresh',   # Import token refresh tasks
     ]
 )
 
@@ -55,6 +56,14 @@ celery_app.conf.update(
         'check-pending-campaigns': {
             'task': 'app.tasks.campaign_tasks.check_pending_campaigns',
             'schedule': crontab(minute='*/1'),  # Every minute
+        },
+        'refresh-expiring-whatsapp-tokens': {
+            'task': 'refresh_expiring_whatsapp_tokens',
+            'schedule': crontab(hour=2, minute=0),  # Daily at 2:00 AM
+        },
+        'check-expired-whatsapp-tokens': {
+            'task': 'check_expired_whatsapp_tokens',
+            'schedule': crontab(hour=8, minute=0),  # Daily at 8:00 AM
         },
     },
 )

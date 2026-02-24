@@ -258,3 +258,23 @@ class JewellerAnalyticsResponse(BaseModel):
     read_rate: float
     campaign_success_rates: List[Dict]
     daily_message_volume: List[Dict]
+
+
+# ============ WhatsApp Status Schemas ============
+
+class WhatsAppStatusResponse(BaseModel):
+    """WhatsApp connection status for a jeweller"""
+    connected: bool
+    waba_id: Optional[str] = None
+    waba_name: Optional[str] = None
+    phone_number_id: Optional[str] = None
+    phone_display_number: Optional[str] = None
+    business_verification_status: Optional[str] = None
+    connected_at: Optional[datetime] = None
+    token_expires_at: Optional[datetime] = None
+    token_expires_in_days: Optional[int] = None
+    last_token_refresh: Optional[datetime] = None
+    fb_app_scoped_user_id: Optional[str] = None
+    
+    class Config:
+        from_attributes = True

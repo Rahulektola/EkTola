@@ -1,10 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 from contextlib import asynccontextmanager
 import asyncio
 import logging
 
-from app.routers import admin, auth, contacts, campaigns, templates, analytics, webhooks
+from app.routers import admin, auth, contacts, campaigns, templates, analytics, webhooks, whatsapp_auth
 from app.database import engine, Base
 from app.config import settings
 
@@ -59,6 +61,16 @@ async def lifespan(app: FastAPI):
     # except asyncio.CancelledError:
     #     logger.info("✅ Scheduler stopped")
 
+# Middleware to add no-cache headers
+class NoCacheMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        # Add no-cache headers to prevent browser caching issues
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
+
 # Initialize FastAPI app
 app = FastAPI(
     title="EkTola - WhatsApp Jeweller Platform",
@@ -70,18 +82,29 @@ app = FastAPI(
     lifespan=lifespan  # Add lifespan context manager
 )
 
-# CORS middleware
+# CORS middleware - Allow frontend to make requests
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Update with specific origins in production
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "*"  # Fallback for development
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+# Add no-cache middleware to prevent browser caching issues
+app.add_middleware(NoCacheMiddleware)
 
 # Include routers
 app.include_router(admin.router)
 app.include_router(auth.router)
+app.include_router(whatsapp_auth.router)
 app.include_router(contacts.router)
 app.include_router(campaigns.router)
 app.include_router(templates.router)

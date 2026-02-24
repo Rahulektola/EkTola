@@ -124,6 +124,9 @@ function setupEventListeners(): void {
     });
 
     document.getElementById('btn-upload')?.addEventListener('click', uploadContacts);
+    
+    // Debug contacts - removed in favor of inline segment display
+    // document.getElementById('btn-debug-contacts')?.addEventListener('click', showContactsDiagnostics);
 }
 
 /**
@@ -223,22 +226,73 @@ function switchTab(tab: string): void {
 }
 
 /**
+ * Load segment distribution
+ */
+async function loadSegmentDistribution(): Promise<void> {
+    try {
+        const cacheBust = Date.now();
+        const data = await apiRequest<any>(
+            `/admin/jewellers/${jewellerId}/contacts/diagnostics?_t=${cacheBust}`,
+            authService
+        );
+        
+        console.log('[Segments] Diagnostics data:', data);
+        
+        const segmentContainer = document.getElementById('segment-stats')!;
+        
+        if (!data.diagnostics.segment_distribution || data.diagnostics.segment_distribution.length === 0) {
+            segmentContainer.innerHTML = '<span style="color: #9ca3af;">No contacts yet</span>';
+            return;
+        }
+        
+        segmentContainer.innerHTML = data.diagnostics.segment_distribution.map((s: any) => `
+            <div style="padding: 0.5rem 1rem; background: white; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                <div style="font-size: 0.75rem; color: #6b7280; text-transform: uppercase;">${s.segment}</div>
+                <div style="font-size: 1.25rem; font-weight: 600; color: #111827;">${s.count}</div>
+            </div>
+        `).join('');
+        
+        console.log('[Segments] Successfully rendered segment distribution');
+    } catch (error) {
+        console.error('[Segments] Failed to load:', error);
+        document.getElementById('segment-stats')!.innerHTML = '<span style="color: #ef4444;">Failed to load</span>';
+    }
+}
+
+/**
  * Load contacts
  */
 async function loadContacts(): Promise<void> {
     const container = document.getElementById('contacts-list')!;
     container.innerHTML = '<p>Loading contacts...</p>';
 
+    console.log('[Contacts] Loading contacts for jeweller ID:', jewellerId);
+
     try {
+        // Add cache-busting parameter to force fresh request
+        const cacheBust = Date.now();
+        const url = `/admin/jewellers/${jewellerId}/contacts?page_size=50&_t=${cacheBust}`;
+        console.log('[Contacts] Fetching from:', url);
+        
         const data = await apiRequest<any>(
-            `/admin/jewellers/${jewellerId}/contacts?page_size=50`,
+            url,
             authService
         );
 
-        if (data.contacts.length === 0) {
-            container.innerHTML = '<p>No contacts found</p>';
+        console.log('[Contacts] API response:', data);
+        console.log('[Contacts] Total contacts:', data.total);
+        console.log('[Contacts] Contacts array length:', data.contacts?.length || 0);
+
+        if (!data.contacts || data.contacts.length === 0) {
+            const message = data.total > 0 
+                ? `<p class="info">Total of ${formatNumber(data.total)} contacts found, but none loaded in this batch.</p>`
+                : '<p>No contacts found</p>';
+            container.innerHTML = message;
+            console.log('[Contacts] No contacts to display');
             return;
         }
+
+        console.log('[Contacts] Rendering', data.contacts.length, 'contacts');
 
         container.innerHTML = `
             <p>Total: ${formatNumber(data.total)} contacts</p>
@@ -266,9 +320,25 @@ async function loadContacts(): Promise<void> {
             </table>
             ${data.total > 10 ? `<p class="text-muted">Showing first 10 of ${formatNumber(data.total)} contacts</p>` : ''}
         `;
+        
+        console.log('[Contacts] Successfully rendered contacts list');
+        
+        // Load segment distribution
+        loadSegmentDistribution();
     } catch (error) {
-        console.error('Failed to load contacts:', error);
-        container.innerHTML = '<p class="error">Failed to load contacts</p>';
+        console.error('[Contacts] Failed to load contacts:', error);
+        console.error('[Contacts] Error details:', {
+            jewellerId,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined
+        });
+        container.innerHTML = `
+            <div class="error">
+                <p>Failed to load contacts</p>
+                <p class="text-muted">${error instanceof Error ? error.message : 'Unknown error'}</p>
+                <button class="btn btn-secondary btn-sm" onclick="location.reload()">Retry</button>
+            </div>
+        `;
     }
 }
 
@@ -587,9 +657,54 @@ async function uploadContacts(): Promise<void> {
         `;
 
         showToast('Upload completed', 'success');
-        loadContacts(); // Reload contacts list
+        
+        // Reload jeweller details to update stat cards and contact list
+        await loadJewellerDetails();
     } catch (error) {
         setButtonLoading(uploadBtn, false);
         showError(errorEl, error instanceof Error ? error.message : 'Upload failed');
+    }
+}
+
+/**
+ * Show contacts diagnostics information
+ */
+async function showContactsDiagnostics(): Promise<void> {
+    console.log('[Diagnostics] Fetching diagnostics for jeweller ID:', jewellerId);
+    
+    try {
+        // Add cache-busting parameter
+        const cacheBust = Date.now();
+        const data = await apiRequest<any>(
+            `/admin/jewellers/${jewellerId}/contacts/diagnostics?_t=${cacheBust}`,
+            authService
+        );
+        
+        console.log('[Diagnostics] Data received:', data);
+        
+        // Display in alert for now (can be improved with modal)
+        const diagnosticsInfo = `
+=== CONTACT DIAGNOSTICS ===
+Jeweller: ${data.jeweller_name} (ID: ${data.jeweller_id})
+
+Total Contacts (All): ${data.diagnostics.total_contacts_all}
+Total Contacts (Active): ${data.diagnostics.total_contacts_active}
+Total Contacts (Deleted): ${data.diagnostics.total_contacts_deleted}
+
+Segment Distribution:
+${data.diagnostics.segment_distribution.map((s: any) => `  - ${s.segment}: ${s.count}`).join('\n')}
+
+Sample Contacts (Latest 5):
+${data.diagnostics.sample_contacts.map((c: any, idx: number) => `  ${idx + 1}. ${c.name} (${c.phone_number}) - ${c.segment}`).join('\n')}
+
+API Endpoint: ${data.api_test.endpoint}
+        `.trim();
+        
+        alert(diagnosticsInfo);
+        console.log('[Diagnostics] Full data:', JSON.stringify(data, null, 2));
+        
+    } catch (error) {
+        console.error('[Diagnostics] Failed to fetch diagnostics:', error);
+        showToast('Failed to fetch diagnostics', 'error');
     }
 }

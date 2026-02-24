@@ -426,6 +426,9 @@ export async function apiRequest<T>(
         ...options,
         headers: {
             'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
             ...authService.getAuthHeaders(),
             ...options.headers,
         },
@@ -449,15 +452,39 @@ export async function apiUpload<T>(
 ): Promise<T> {
     const url = `${baseURL}${endpoint}`;
     
+    // Get auth headers but exclude Content-Type for file uploads
+    // Browser will automatically set Content-Type with multipart boundary
+    const authHeaders = authService.getAuthHeaders();
+    const headers: HeadersInit = {};
+    
+    // Only include Authorization header, not Content-Type
+    if (authHeaders && typeof authHeaders === 'object' && 'Authorization' in authHeaders) {
+        headers['Authorization'] = (authHeaders as Record<string, string>)['Authorization'];
+    }
+    
     const response = await fetch(url, {
         method: 'POST',
-        headers: authService.getAuthHeaders(),
+        headers: headers,
         body: formData,
     });
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
-        throw new Error(error.detail || `Upload failed with status ${response.status}`);
+        
+        // Handle detail being an object or array (FastAPI validation errors)
+        let errorMessage: string;
+        if (typeof error.detail === 'string') {
+            errorMessage = error.detail;
+        } else if (Array.isArray(error.detail)) {
+            // FastAPI validation errors return an array of error objects
+            errorMessage = error.detail.map((e: any) => e.msg || JSON.stringify(e)).join(', ');
+        } else if (error.detail && typeof error.detail === 'object') {
+            errorMessage = JSON.stringify(error.detail);
+        } else {
+            errorMessage = `Upload failed with status ${response.status}`;
+        }
+        
+        throw new Error(errorMessage);
     }
 
     return response.json();

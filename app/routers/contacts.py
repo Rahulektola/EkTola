@@ -188,6 +188,7 @@ async def bulk_upload_dashboard(
                 )
                 db.add(new_contact)
                 imported += 1
+                print(f"[Jeweller Upload] Created contact for jeweller_id={current_jeweller.id}: {name} ({normalized_mobile})")
         
         except Exception as e:
             failed += 1

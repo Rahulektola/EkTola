@@ -4,9 +4,10 @@
  */
 
 import { API_BASE } from '@/config/api';
-import { AuthService } from '@/services/auth';
+import '@/services/auth'; // Initialize global authService
 
-const authService = new AuthService();
+// Use the global authService instance
+const authService = window.authService;
 
 let adminRegisterForm: HTMLFormElement;
 let adminFullNameInput: HTMLInputElement;

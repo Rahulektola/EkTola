@@ -2,9 +2,10 @@
  * Jeweller Registration Page Logic
  */
 
-import { AuthService } from '@/services/auth';
+import '@/services/auth'; // Initialize global authService
 
-const authService = new AuthService();
+// Use the global authService instance
+const authService = window.authService;
 
 let registerForm: HTMLFormElement;
 let businessNameInput: HTMLInputElement;

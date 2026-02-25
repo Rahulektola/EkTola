@@ -18,7 +18,7 @@ window.__whatsappConfigData = null;
 // ==================== Utility Functions ====================
 
 // Backend API base URL
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = '/api';
 
 function getAuthToken() {
   return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');

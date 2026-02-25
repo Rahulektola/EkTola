@@ -52,6 +52,19 @@ let selectedFile: File | null = null;
 // Auth check
 console.log('🔐 Dashboard initializing...');
 console.log('✓ Is authenticated:', window.authService.isAuthenticated());
+console.log('📋 Access token exists:', !!window.authService.accessToken);
+console.log('📋 Token from localStorage:', !!localStorage.getItem('access_token'));
+
+// Check token expiration
+if (window.authService.accessToken) {
+  const isExpired = window.authService.isTokenExpired(window.authService.accessToken);
+  console.log('⏰ Token expired:', isExpired);
+  if (isExpired) {
+    console.warn('⚠️ Token is expired, redirecting to login');
+    window.authService.logout();
+    window.location.href = '/index.html';
+  }
+}
 
 if (!window.authService.isAuthenticated()) {
   console.warn('⚠️ Not authenticated, redirecting to login');
@@ -62,8 +75,15 @@ if (!window.authService.isAuthenticated()) {
 async function loadDashboard(): Promise<void> {
   try {
     console.log('📊 Loading dashboard data...');
-    const response = await fetch(`${API_BASE}/analytics/dashboard`, {
-      headers: window.authService.getAuthHeaders()
+    const authHeaders = window.authService.getAuthHeaders();
+    console.log('🔑 Auth headers:', JSON.stringify(authHeaders));
+    
+    const cacheBuster = Date.now();
+    const response = await fetch(`${API_BASE}/analytics/dashboard?_t=${cacheBuster}`, {
+      headers: {
+        ...authHeaders,
+        'Cache-Control': 'no-cache'
+      }
     });
 
     if (!response.ok) {
@@ -511,6 +531,14 @@ window.openAdminPermissionModal = openAdminPermissionModal;
 window.closeAdminPermissionModal = closeAdminPermissionModal;
 window.grantAdminPermission = grantAdminPermission;
 
-// Initialize on page load
-setupImpersonationBanner();
-loadDashboard();
+// Initialize on page load - ensure DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    setupImpersonationBanner();
+    loadDashboard();
+  });
+} else {
+  // DOM already loaded
+  setupImpersonationBanner();
+  loadDashboard();
+}

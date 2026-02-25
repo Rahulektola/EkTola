@@ -41,12 +41,21 @@ export class AuthService {
   private loadTokens(): void {
     this.accessToken = localStorage.getItem('access_token');
     this.refreshToken = localStorage.getItem('refresh_token');
+    console.log('[AuthService] Loaded tokens:', {
+      hasAccessToken: !!this.accessToken,
+      hasRefreshToken: !!this.refreshToken,
+      accessTokenLength: this.accessToken?.length ?? 0
+    });
   }
 
   /**
    * Store tokens in localStorage
    */
   public storeTokens(accessToken: string, refreshToken: string): void {
+    console.log('[AuthService] Storing tokens:', {
+      accessTokenLength: accessToken?.length ?? 0,
+      refreshTokenLength: refreshToken?.length ?? 0
+    });
     this.accessToken = accessToken;
     this.refreshToken = refreshToken;
     localStorage.setItem('access_token', accessToken);

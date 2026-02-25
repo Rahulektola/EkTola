@@ -3,7 +3,7 @@
  * Handles JWT token management and authentication operations
  */
 export class AuthService {
-    constructor(baseURL = 'http://localhost:8000') {
+    constructor(baseURL = '/api') {
         this.accessToken = null;
         this.refreshToken = null;
         this.baseURL = baseURL;

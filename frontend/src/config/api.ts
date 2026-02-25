@@ -6,9 +6,9 @@
 /**
  * Base URL for all API requests
  * Uses VITE_API_URL from environment variables
- * Defaults to http://localhost:8000 if not set
+ * Defaults to /api proxy path if not set
  */
-export const API_BASE: string = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+export const API_BASE: string = import.meta.env.VITE_API_URL || '/api';
 
 /**
  * Build full API URL from endpoint path

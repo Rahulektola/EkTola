@@ -83,7 +83,7 @@ if (!window.authService.isAuthenticated()) {
 async function loadDashboard(): Promise<void> {
   try {
     console.log('📊 Loading dashboard data...');
-    const response = await fetch('http://localhost:8000/analytics/dashboard', {
+    const response = await fetch('/api/analytics/dashboard', {
       headers: window.authService.getAuthHeaders()
     });
 
@@ -133,7 +133,7 @@ function updateUI(data: DashboardData): void {
 
 async function loadJewellerProfile(): Promise<void> {
   try {
-    const response = await fetch('http://localhost:8000/auth/me/jeweller', {
+    const response = await fetch('/api/auth/me/jeweller', {
       headers: window.authService.getAuthHeaders()
     });
 
@@ -291,7 +291,7 @@ async function submitAddContact(): Promise<void> {
 
     console.log('✓ Auth token exists and is valid');
 
-    const response = await fetch('http://localhost:8000/contacts/add-one', {
+    const response = await fetch('/api/contacts/add-one', {
       method: 'POST',
       headers: window.authService.getAuthHeaders(),
       body: JSON.stringify(contactData)
@@ -390,7 +390,7 @@ async function submitBulkUpload(): Promise<void> {
     uploadBtn.disabled = true;
     uploadBtn.textContent = 'Uploading...';
 
-    const response = await fetch('http://localhost:8000/contacts/bulk-upload-dashboard', {
+    const response = await fetch('/api/contacts/bulk-upload-dashboard', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${window.authService.accessToken}`

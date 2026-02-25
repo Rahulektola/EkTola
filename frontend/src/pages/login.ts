@@ -3,9 +3,10 @@
  * Handles form interactions and authentication flows
  */
 
-import { AuthService } from '@/services/auth';
+import '@/services/auth'; // Initialize global authService
 
-const authService = new AuthService();
+// Use the global authService instance
+const authService = window.authService;
 
 let passwordLoginForm: HTMLFormElement;
 let otpRequestForm: HTMLFormElement;
@@ -107,7 +108,7 @@ function checkExistingAuth(): void {
     if (!authService.isTokenExpired(authService.accessToken)) {
       showSuccess('Already logged in. Redirecting...');
       setTimeout(() => {
-        window.location.href = '/dashboard.html';
+        window.location.replace('/dashboard.html');
       }, 1000);
     } else {
       authService.logout();
@@ -155,16 +156,16 @@ async function handlePasswordLogin(e: Event): Promise<void> {
     if (decoded && decoded.is_admin) {
       showSuccess('Login successful! Redirecting to admin dashboard...');
       setTimeout(() => {
-        window.location.href = '/admin/dashboard.html';
+        window.location.replace('/admin/dashboard.html?t=' + Date.now());
       }, 1500);
     } else {
       showSuccess('Login successful! Redirecting to dashboard...');
       setTimeout(() => {
-        window.location.href = '/dashboard.html';
+        window.location.replace('/dashboard.html?t=' + Date.now());
       }, 1500);
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Login failed. Please check your credentials.';
+    const message = error instanceof Error ? error.message : 'Login failed. Please check your credentials';
     showError(formError, message);
     setLoading(loginButton, false);
   }
@@ -225,12 +226,12 @@ async function handleOtpVerify(e: Event): Promise<void> {
     if (decoded && decoded.is_admin) {
       showSuccess('Login successful! Redirecting to admin dashboard...');
       setTimeout(() => {
-        window.location.href = '/admin/dashboard.html';
+        window.location.replace('/admin/dashboard.html?t=' + Date.now());
       }, 1500);
     } else {
       showSuccess('Login successful! Redirecting to dashboard...');
       setTimeout(() => {
-        window.location.href = '/dashboard.html';
+        window.location.replace('/dashboard.html?t=' + Date.now());
       }, 1500);
     }
   } catch (error) {

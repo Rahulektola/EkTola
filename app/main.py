@@ -82,24 +82,18 @@ app = FastAPI(
     lifespan=lifespan  # Add lifespan context manager
 )
 
-# CORS middleware - Allow frontend to make requests
+# Add no-cache middleware FIRST (will be innermost)
+app.add_middleware(NoCacheMiddleware)
+
+# CORS middleware LAST (will be outermost - handles preflight requests first)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        "*"  # Fallback for development
-    ],
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_origins=["*"],  # Allow all origins in development
+    allow_credentials=False,
+    allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
-
-# Add no-cache middleware to prevent browser caching issues
-app.add_middleware(NoCacheMiddleware)
 
 # Include routers
 app.include_router(admin.router)

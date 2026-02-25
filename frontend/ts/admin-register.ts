@@ -159,7 +159,7 @@ async function handleAdminRegistration(e: Event): Promise<void> {
     }
     
     if (message.includes('fetch') || message.includes('NetworkError') || message.includes('Failed to fetch')) {
-      showError(adminRegisterFormError, 'Cannot connect to server. Please ensure the backend is running at http://localhost:8000');
+      showError(adminRegisterFormError, 'Cannot connect to server. Please check your network connection.');
     } else {
       showError(adminRegisterFormError, message);
     }

@@ -5,7 +5,7 @@
 
 import { AuthService } from '../auth.js';
 
-const baseURL = 'http://localhost:8000';
+const baseURL = '/api';
 
 /**
  * Check if user is authenticated as admin

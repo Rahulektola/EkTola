@@ -1,3 +1,6 @@
+
+//updated the server for demo purposes
+
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { resolve } from 'path';
@@ -34,17 +37,20 @@ export default defineConfig({
     },
   },
 
-  server: {
-    port: 3000,
-    open: true,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
-      },
+  // host and allowerdHosts added.
+ server: {
+  host: '0.0.0.0',
+  port: 3000,
+  open: true,
+  allowedHosts: true,
+  proxy: {
+    '/api': {
+      target: 'http://localhost:8000',
+      changeOrigin: true,
+      rewrite: (path) => path.replace(/^\/api/, ''),
     },
   },
+},
 
   plugins: [
     VitePWA({

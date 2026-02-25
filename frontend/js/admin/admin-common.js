@@ -2,7 +2,7 @@
  * Admin Common Utilities
  * Shared functions and components for admin dashboard pages
  */
-const baseURL = 'http://localhost:8000';
+const baseURL = '/api';
 /**
  * Check if user is authenticated as admin
  * Redirects to admin login if not authenticated or not admin

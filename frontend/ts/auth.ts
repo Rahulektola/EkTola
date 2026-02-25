@@ -23,7 +23,7 @@ export class AuthService {
   public accessToken: string | null = null;
   public refreshToken: string | null = null;
 
-  constructor(baseURL = 'http://localhost:8000') {
+  constructor(baseURL = '/api') {
     this.baseURL = baseURL;
     this.loadTokens();
   }

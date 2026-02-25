@@ -3,9 +3,10 @@
  * Handles admin-only authentication with role verification
  */
 
-import { AuthService } from '@/services/auth';
+import '@/services/auth'; // Initialize global authService
 
-const authService = new AuthService();
+// Use the global authService instance
+const authService = window.authService;
 
 let adminLoginForm: HTMLFormElement;
 let adminEmailInput: HTMLInputElement;

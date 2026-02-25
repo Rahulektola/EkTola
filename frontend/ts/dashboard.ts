@@ -102,6 +102,9 @@ async function loadDashboard(): Promise<void> {
 }
 
 function updateUI(data: DashboardData): void {
+  console.log('🔄 updateUI called with data:', data);
+  console.log('📊 total_contacts value:', data.total_contacts);
+  
   const elements = {
     totalContacts: document.getElementById('totalContacts'),
     optedOut: document.getElementById('optedOut'),
@@ -111,7 +114,12 @@ function updateUI(data: DashboardData): void {
     readRate: document.getElementById('readRate')
   };
 
-  if (elements.totalContacts) elements.totalContacts.textContent = String(data.total_contacts || 0);
+  if (elements.totalContacts) {
+    console.log('✓ Setting totalContacts to:', data.total_contacts || 0);
+    elements.totalContacts.textContent = String(data.total_contacts || 0);
+  } else {
+    console.error('❌ totalContacts element not found!');
+  }
   if (elements.optedOut) elements.optedOut.textContent = String(data.opted_out_contacts || 0);
   if (elements.activeCampaigns) elements.activeCampaigns.textContent = String(data.active_campaigns || 0);
   if (elements.messagesSent) elements.messagesSent.textContent = String(data.total_messages_sent || 0);
@@ -264,25 +272,40 @@ async function submitAddContact(): Promise<void> {
       return;
     }
 
-    if (!window.authService.accessToken) {
+    const token = window.authService.accessToken;
+    if (!token) {
       console.error('❌ No access token found');
       alert('Session expired. Please login again.');
       window.location.href = '/index.html';
       return;
     }
 
-    console.log('✓ Auth token exists');
+    // Check if token is expired
+    if (window.authService.isTokenExpired(token)) {
+      console.error('❌ Access token has expired');
+      alert('Your session has expired. Please login again.');
+      window.authService.logout();
+      window.location.href = '/index.html';
+      return;
+    }
+
+    console.log('✓ Auth token exists and is valid');
 
     const response = await fetch('http://localhost:8000/contacts/add-one', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${window.authService.accessToken}`,
-        'Content-Type': 'application/json'
-      },
+      headers: window.authService.getAuthHeaders(),
       body: JSON.stringify(contactData)
     });
 
     console.log('📡 Response status:', response.status);
+
+    if (response.status === 401) {
+      console.error('❌ Unauthorized - token may be invalid');
+      alert('Session expired. Please login again.');
+      window.authService.logout();
+      window.location.href = '/index.html';
+      return;
+    }
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));

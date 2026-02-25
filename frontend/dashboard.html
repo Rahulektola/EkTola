@@ -9,6 +9,13 @@
 
 
 
+
+
+
+
+
+
+
   <!-- space added  -->
   <!-- Unregister service worker temporarily for testing -->
   <script>
@@ -20,6 +27,20 @@
         }
       });
     }
+  </script>
+
+  <!-- Facebook SDK for WhatsApp Embedded Signup -->
+  <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
+  <script>
+    window.fbAsyncInit = function() {
+      FB.init({
+        appId: '2416144582179119',
+        cookie: true,
+        xfbml: true,
+        version: 'v25.0'
+      });
+      console.log('[FB SDK] Initialized');
+    };
   </script>
   
   <link rel="stylesheet" href="/css/style.css">
@@ -36,15 +57,6 @@
       --border-color: #e5e7eb;
       --bg-light: #f9fafb;
     }
-
-<body>
-    <!-- Impersonation Banner (shown only when admin is viewing as jeweller) -->
-    <div id="impersonation-banner" style="display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 10000; background: #dc2626; color: white; padding: 0.75rem 1rem; text-align: center; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-        <span id="impersonation-text">Viewing as Jeweller</span>
-        <button id="exit-impersonation" style="background: white; color: #dc2626; border: none; padding: 0.25rem 1rem; border-radius: 0.25rem; margin-left: 1rem; cursor: pointer; font-weight: 600;">
-            Exit Admin View
-        </button>
-    </div>
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -242,6 +254,7 @@
       font-size: 32px;
       font-weight: 700;
       margin-bottom: 4px;
+      color: #111827;
     }
 
     .stat-label {
@@ -435,7 +448,6 @@
     .action-card:hover {
       border-color: var(--primary-color);
       background: #f9fafb;
-      transform: translateY(-2px);
     }
 
     .action-icon {
@@ -740,6 +752,14 @@
   </style>
 </head>
 <body>
+  <!-- Impersonation Banner (shown only when admin is viewing as jeweller) -->
+  <div id="impersonation-banner" style="display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 10000; background: #dc2626; color: white; padding: 0.75rem 1rem; text-align: center; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+    <span id="impersonation-text">Viewing as Jeweller</span>
+    <button id="exit-impersonation" style="background: white; color: #dc2626; border: none; padding: 0.25rem 1rem; border-radius: 0.25rem; margin-left: 1rem; cursor: pointer; font-weight: 600;">
+      Exit Admin View
+    </button>
+  </div>
+
   <!-- Navigation -->
   <nav class="navbar">
     <div class="nav-content">
@@ -824,6 +844,59 @@
       </div>
     </div>
 
+    <!-- WhatsApp Connection Status -->
+    <div class="card" style="margin-bottom: 24px; border: 2px solid #25D366;">
+      <div class="card-header" style="background: linear-gradient(135deg, #25D366 0%, #128C7E 100%); color: white; border-radius: 12px 12px 0 0;">
+        <h2 class="card-title" style="color: white;">📱 WhatsApp Business Connection</h2>
+      </div>
+      <div style="padding: 24px;">
+        <!-- Not Connected State -->
+        <div id="whatsapp-not-connected">
+          <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 250px;">
+              <h3 style="color: #128C7E; margin-bottom: 8px;">Connect Your WhatsApp Business Account</h3>
+              <p style="color: #6b7280; margin-bottom: 16px;">To send campaigns, you need to connect your WhatsApp Business Account. This is a one-time setup that takes about 5 minutes.</p>
+              <button onclick="launchWhatsAppSignup()" class="btn" style="background: #25D366; color: white; padding: 12px 24px; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 20px;">📲</span> Connect WhatsApp Now
+              </button>
+            </div>
+            <div style="text-align: center; padding: 20px;">
+              <div style="font-size: 64px;">💬</div>
+              <p style="color: #9ca3af; font-size: 12px;">Powered by Meta</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Connected State -->
+        <div id="whatsapp-connected" style="display: none;">
+          <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+            <div style="flex: 1;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                <span style="font-size: 24px;">✅</span>
+                <h3 style="color: #10b981;">WhatsApp Connected</h3>
+              </div>
+              <div style="display: grid; gap: 8px;">
+                <div><strong>Business:</strong> <span id="waba-name">-</span></div>
+                <div><strong>Phone:</strong> <span id="phone-display">-</span></div>
+                <div><strong>Status:</strong> <span id="verification-status" class="badge badge-success">Active</span></div>
+              </div>
+            </div>
+            <div>
+              <button onclick="disconnectWhatsApp()" class="btn btn-secondary" style="color: #ef4444;">
+                🔌 Disconnect
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="whatsapp-loading" style="display: none; justify-content: center; align-items: center; padding: 40px; flex-direction: column; gap: 16px;">
+          <div class="spinner"></div>
+          <p class="loading-message" style="color: #6b7280;">Processing...</p>
+        </div>
+      </div>
+    </div>
+
     <!-- Content Grid -->
     <div class="content-grid">
       <!-- Recent Campaigns -->
@@ -852,7 +925,7 @@
     <!-- Upload Options -->
     <div class="card">
       <div class="card-header">
-        <h2 class="card-title">📥 Add Contacts</h2>
+        <h2 class="card-title">📥 Upload Contacts (3 Ways)</h2>
       </div>
       <div class="quick-actions">
         <div class="action-card" onclick="openAddOneModal()">
@@ -862,13 +935,13 @@
         </div>
         <div class="action-card" onclick="openBulkUploadModal()">
           <div class="action-icon">📁</div>
-          <h3>Bulk Upload</h3>
-          <p>Upload Excel/CSV file</p>
+          <h3>Bulk Upload (CSV)</h3>
+          <p>Import multiple contacts at once</p>
         </div>
         <div class="action-card" onclick="openAdminPermissionModal()">
           <div class="action-icon">👨‍💼</div>
           <h3>Admin Upload</h3>
-          <p>Allow admin to add contacts</p>
+          <p>Admin adds contacts for you</p>
         </div>
       </div>
     </div>
@@ -983,5 +1056,8 @@
   <!-- Load compiled TypeScript files as ES6 modules -->
   <script type="module" src="/js/auth.js?v=2"></script>
   <script type="module" src="/js/dashboard.js?v=2"></script>
+  
+  <!-- WhatsApp Embedded Signup -->
+  <script src="/js/whatsapp-connect.js"></script>
 </body>
 </html>

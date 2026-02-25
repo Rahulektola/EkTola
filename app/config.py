@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     WHATSAPP_TOKEN_ENCRYPTION_KEY: str = ""  # Fernet key for encrypting jeweller tokens
     FACEBOOK_CONFIG_ID: str = ""  # Facebook Embedded Signup Configuration ID
     WHATSAPP_CALLBACK_BASE_URL: str = ""  # Base URL for OAuth callbacks (e.g., https://yourdomain.com)
+    WHATSAPP_SYSTEM_USER_TOKEN: str = ""  # System User Token for token exchange
     
     # Environment
     ENVIRONMENT: str = "development"

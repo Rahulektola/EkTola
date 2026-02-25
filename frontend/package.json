@@ -2,12 +2,18 @@
   "name": "ektola-frontend",
   "private": true,
   "version": "0.1.0",
-  "description": "ekTola frontend (TypeScript migration)",
+  "description": "ekTola frontend (Vite + TypeScript)",
+  "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "watch": "tsc -p tsconfig.json --watch"
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "typescript": "^5.5.4"
+    "@types/node": "^25.3.0",
+    "typescript": "^5.5.4",
+    "vite": "^7.3.1",
+    "vite-plugin-pwa": "^1.2.0"
   }
 }

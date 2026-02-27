@@ -34,6 +34,9 @@ class Jeweller(Base):
     is_approved = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     
+    # Admin notes (private, internal use only)
+    admin_notes = Column(Text, nullable=True)
+    
     # Settings
     timezone = Column(String(50), default="Asia/Kolkata")
     

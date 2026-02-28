@@ -220,10 +220,17 @@ function updateDistribution(distribution: ContactDistribution[]): void {
     return;
   }
 
+  const segmentDisplayNames: Record<string, string> = {
+    'GOLD_LOAN': 'Gold Loan',
+    'GOLD_SIP': 'Gold SIP',
+    'BOTH': 'Both (SIP & Loan)',
+    'MARKETING': 'Marketing',
+  };
+
   container.innerHTML = distribution.map(item => `
     <div class="distribution-item">
       <div class="dist-info">
-        <h4>${item.segment}</h4>
+        <h4>${segmentDisplayNames[item.segment] || item.segment}</h4>
         <div class="dist-languages">
           ${item.languages ? item.languages.join(', ') : 'All languages'}
         </div>

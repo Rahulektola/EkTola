@@ -54,9 +54,9 @@ def add_one_contact(
     
     # Map purpose to segment
     purpose_to_segment = {
-        "SIP": SegmentType.MARKETING,
+        "SIP": SegmentType.GOLD_SIP,
         "LOAN": SegmentType.GOLD_LOAN,
-        "BOTH": SegmentType.MARKETING  # Default to marketing for dual purpose
+        "BOTH": SegmentType.BOTH
     }
     
     segment = purpose_to_segment.get(request.purpose, SegmentType.MARKETING)
@@ -135,9 +135,9 @@ async def bulk_upload_dashboard(
     
     # Map purpose to segment
     purpose_to_segment = {
-        "SIP": SegmentType.MARKETING,
+        "SIP": SegmentType.GOLD_SIP,
         "LOAN": SegmentType.GOLD_LOAN,
-        "BOTH": SegmentType.MARKETING
+        "BOTH": SegmentType.BOTH
     }
     
     for idx, row in df.iterrows():

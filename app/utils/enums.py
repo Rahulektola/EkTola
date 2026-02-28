@@ -12,6 +12,7 @@ class SegmentType(str, Enum):
     """Contact segment types - MVP locked"""
     GOLD_LOAN = "GOLD_LOAN"
     GOLD_SIP = "GOLD_SIP"
+    BOTH = "BOTH"
     MARKETING = "MARKETING"
 
 

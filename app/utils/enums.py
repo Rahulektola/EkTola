@@ -15,6 +15,24 @@ class SegmentType(str, Enum):
     BOTH = "BOTH"
     MARKETING = "MARKETING"
 
+    @staticmethod
+    def merge(a: 'SegmentType', b: 'SegmentType') -> 'SegmentType':
+        """Merge two segments together.
+        SIP + LOAN -> BOTH, any + BOTH -> BOTH, same + same -> same,
+        MARKETING + service -> BOTH.
+        """
+        if a == b:
+            return a
+        if a == SegmentType.BOTH or b == SegmentType.BOTH:
+            return SegmentType.BOTH
+        service = {SegmentType.GOLD_SIP, SegmentType.GOLD_LOAN}
+        if {a, b} == service:
+            return SegmentType.BOTH
+        # One is MARKETING + one is a service segment
+        if a == SegmentType.MARKETING or b == SegmentType.MARKETING:
+            return SegmentType.BOTH
+        return SegmentType.BOTH
+
 
 class CampaignType(str, Enum):
     """Campaign types"""

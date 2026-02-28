@@ -46,6 +46,7 @@ class DashboardBulkUploadReport(BaseModel):
     total_rows: int
     imported: int
     updated: int
+    merged: int = 0  # intra-CSV duplicates that were collapsed
     failed: int
     failure_details: List[dict] = Field(default_factory=list)
     message: str = "Upload completed"

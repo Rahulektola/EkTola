@@ -730,6 +730,41 @@
       background: #dc2626;
     }
 
+    /* Edit Button */
+    .btn-edit {
+      background: none;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+      color: var(--text-secondary);
+    }
+
+    .btn-edit:hover {
+      background: var(--bg-light);
+      border-color: var(--primary-color);
+      color: var(--primary-color);
+    }
+
+    .contact-actions-cell {
+      width: 60px;
+      text-align: center;
+    }
+
+    /* Read-only input style */
+    .form-input-readonly {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      font-size: 14px;
+      background: var(--bg-light);
+      color: var(--text-secondary);
+      cursor: not-allowed;
+    }
+
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(-4px); }
       to { opacity: 1; transform: translateY(0); }
@@ -935,6 +970,43 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" id="cancelBulkUpload">Cancel</button>
         <button class="btn btn-primary" id="submitBulkUpload" disabled>Upload Contacts</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Contact Modal -->
+  <div class="modal-overlay" id="editContactModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">✏️ Edit Contact</h3>
+        <button class="modal-close" id="closeEditModal">×</button>
+      </div>
+      <div class="modal-body">
+        <form id="editContactForm">
+          <input type="hidden" id="editContactId">
+          <div class="form-group">
+            <label class="form-label">Phone Number</label>
+            <input type="text" class="form-input-readonly" id="editContactPhone" readonly>
+            <div class="form-help">Phone number cannot be changed (primary identifier)</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Name</label>
+            <input type="text" class="form-input" id="editContactName" placeholder="Contact name">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Segment <span class="required">*</span></label>
+            <select class="form-select" id="editContactSegment" required>
+              <option value="GOLD_SIP">Gold SIP</option>
+              <option value="GOLD_LOAN">Gold Loan</option>
+              <option value="BOTH">Both (SIP & Loan)</option>
+              <option value="MARKETING">Marketing</option>
+            </select>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelEditContact">Cancel</button>
+        <button class="btn btn-primary" id="submitEditContact">Save Changes</button>
       </div>
     </div>
   </div>

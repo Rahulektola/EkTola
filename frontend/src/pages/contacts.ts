@@ -132,6 +132,11 @@ function initEventListeners(): void {
   document.getElementById('cancelAddContact')?.addEventListener('click', closeAddModal);
   document.getElementById('submitAddContact')?.addEventListener('click', submitAddContact);
 
+  // Edit Contact Modal
+  document.getElementById('closeEditModal')?.addEventListener('click', closeEditModal);
+  document.getElementById('cancelEditContact')?.addEventListener('click', closeEditModal);
+  document.getElementById('submitEditContact')?.addEventListener('click', submitEditContact);
+
   // Bulk Upload Modal
   document.getElementById('bulkUploadBtn')?.addEventListener('click', openBulkModal);
   document.getElementById('closeBulkModal')?.addEventListener('click', closeBulkModal);
@@ -284,6 +289,7 @@ function renderContacts(data: ContactListResponse): void {
           <th>Name</th>
           <th>Phone</th>
           <th>Segment</th>
+          <th class="contact-actions-cell">Edit</th>
         </tr>
       </thead>
       <tbody>
@@ -300,6 +306,13 @@ function renderContacts(data: ContactListResponse): void {
                 ${SEGMENT_DISPLAY[contact.segment] || contact.segment}
               </span>
             </td>
+            <td class="contact-actions-cell">
+              <button class="btn-edit" data-contact-id="${contact.id}"
+                data-contact-name="${escapeHtml(contact.name || '')}"
+                data-contact-phone="${escapeHtml(contact.phone_number)}"
+                data-contact-segment="${contact.segment}"
+                title="Edit contact">✏️</button>
+            </td>
           </tr>
         `).join('')}
       </tbody>
@@ -310,6 +323,9 @@ function renderContacts(data: ContactListResponse): void {
 
   // Attach checkbox event listeners
   attachCheckboxListeners(data.contacts);
+
+  // Attach edit button listeners
+  attachEditListeners();
 }
 
 function renderPagination(data: ContactListResponse): void {
@@ -520,7 +536,8 @@ async function submitBulkUpload(): Promise<void> {
     const result = await response.json();
 
     closeBulkModal();
-    alert(`✅ Upload complete!\n\nImported: ${result.imported}\nUpdated: ${result.updated}\nFailed: ${result.failed}\nTotal rows: ${result.total_rows}`);
+    const mergedMsg = result.merged > 0 ? `\nMerged (duplicates in file): ${result.merged}` : '';
+    alert(`✅ Upload complete!\n\nImported: ${result.imported}\nUpdated: ${result.updated}${mergedMsg}\nFailed: ${result.failed}\nTotal rows: ${result.total_rows}`);
     loadContacts();
     loadStats();
   } catch (err) {
@@ -548,6 +565,80 @@ function formatFileSize(bytes: number): string {
 function setTextContent(id: string, text: string): void {
   const el = document.getElementById(id);
   if (el) el.textContent = text;
+}
+
+// ========== Edit Contact Modal ==========
+
+let editingContactId: number | null = null;
+
+function attachEditListeners(): void {
+  document.querySelectorAll('.btn-edit').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const el = btn as HTMLElement;
+      const id = parseInt(el.dataset.contactId || '0', 10);
+      const name = el.dataset.contactName || '';
+      const phone = el.dataset.contactPhone || '';
+      const segment = el.dataset.contactSegment || 'MARKETING';
+      openEditModal(id, name, phone, segment);
+    });
+  });
+}
+
+function openEditModal(id: number, name: string, phone: string, segment: string): void {
+  editingContactId = id;
+  (document.getElementById('editContactId') as HTMLInputElement).value = id.toString();
+  (document.getElementById('editContactPhone') as HTMLInputElement).value = phone;
+  (document.getElementById('editContactName') as HTMLInputElement).value = name;
+  (document.getElementById('editContactSegment') as HTMLSelectElement).value = segment;
+  document.getElementById('editContactModal')?.classList.add('active');
+}
+
+function closeEditModal(): void {
+  document.getElementById('editContactModal')?.classList.remove('active');
+  editingContactId = null;
+}
+
+async function submitEditContact(): Promise<void> {
+  if (!editingContactId) return;
+
+  const name = (document.getElementById('editContactName') as HTMLInputElement).value.trim();
+  const segment = (document.getElementById('editContactSegment') as HTMLSelectElement).value;
+
+  const submitBtn = document.getElementById('submitEditContact') as HTMLButtonElement;
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Saving...';
+
+  try {
+    const body: Record<string, string> = { segment };
+    if (name) body.name = name;
+
+    const response = await fetch(`${API_BASE}/contacts/${editingContactId}`, {
+      method: 'PATCH',
+      headers: window.authService.getAuthHeaders(),
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.authService.logout();
+        window.location.href = '/index.html';
+        return;
+      }
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to update contact');
+    }
+
+    closeEditModal();
+    alert('✅ Contact updated successfully!');
+    loadContacts();
+    loadStats();
+  } catch (err) {
+    alert(`❌ ${err instanceof Error ? err.message : 'Failed to update contact'}`);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Save Changes';
+  }
 }
 
 // ========== Selection & Delete ==========

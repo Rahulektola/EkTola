@@ -65,6 +65,7 @@ let currentSegmentFilter = '';
 let currentSearch = '';
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 let selectedFile: File | null = null;
+let selectedContactIds: Set<number> = new Set();
 
 // ========== Auth Check ==========
 
@@ -98,6 +99,12 @@ function initEventListeners(): void {
     window.location.href = '/index.html';
   });
 
+  // Delete Selected
+  document.getElementById('deleteSelectedBtn')?.addEventListener('click', openDeleteModal);
+  document.getElementById('closeDeleteModal')?.addEventListener('click', closeDeleteModal);
+  document.getElementById('cancelDeleteBtn')?.addEventListener('click', closeDeleteModal);
+  document.getElementById('confirmDeleteBtn')?.addEventListener('click', confirmBulkDelete);
+
   // Search
   const searchInput = document.getElementById('searchInput') as HTMLInputElement;
   searchInput?.addEventListener('input', () => {
@@ -105,6 +112,7 @@ function initEventListeners(): void {
     searchDebounceTimer = setTimeout(() => {
       currentSearch = searchInput.value.trim();
       currentPage = 1;
+      clearSelection();
       loadContacts();
     }, 300);
   });
@@ -114,6 +122,7 @@ function initEventListeners(): void {
   segmentFilter?.addEventListener('change', () => {
     currentSegmentFilter = segmentFilter.value;
     currentPage = 1;
+    clearSelection();
     loadContacts();
   });
 
@@ -269,6 +278,9 @@ function renderContacts(data: ContactListResponse): void {
     <table class="contacts-table">
       <thead>
         <tr>
+          <th class="contact-checkbox-cell">
+            <input type="checkbox" id="selectAllCheckbox" title="Select all">
+          </th>
           <th>Name</th>
           <th>Phone</th>
           <th>Segment</th>
@@ -276,7 +288,11 @@ function renderContacts(data: ContactListResponse): void {
       </thead>
       <tbody>
         ${data.contacts.map(contact => `
-          <tr>
+          <tr data-contact-id="${contact.id}" class="${selectedContactIds.has(contact.id) ? 'selected' : ''}">
+            <td class="contact-checkbox-cell">
+              <input type="checkbox" class="contact-checkbox" data-contact-id="${contact.id}"
+                ${selectedContactIds.has(contact.id) ? 'checked' : ''}>
+            </td>
             <td class="contact-name">${escapeHtml(contact.name || 'N/A')}</td>
             <td class="contact-phone">${escapeHtml(contact.phone_number)}</td>
             <td>
@@ -291,6 +307,9 @@ function renderContacts(data: ContactListResponse): void {
   `;
 
   container.innerHTML = tableHtml;
+
+  // Attach checkbox event listeners
+  attachCheckboxListeners(data.contacts);
 }
 
 function renderPagination(data: ContactListResponse): void {
@@ -347,6 +366,7 @@ function renderPagination(data: ContactListResponse): void {
       const page = parseInt((btn as HTMLElement).dataset.page || '1', 10);
       if (page !== currentPage) {
         currentPage = page;
+        clearSelection();
         loadContacts();
         // Scroll to top of table
         document.querySelector('.card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -528,4 +548,127 @@ function formatFileSize(bytes: number): string {
 function setTextContent(id: string, text: string): void {
   const el = document.getElementById(id);
   if (el) el.textContent = text;
+}
+
+// ========== Selection & Delete ==========
+
+function attachCheckboxListeners(contacts: Contact[]): void {
+  const pageContactIds = contacts.map(c => c.id);
+
+  // Select All checkbox
+  const selectAllCheckbox = document.getElementById('selectAllCheckbox') as HTMLInputElement;
+  selectAllCheckbox?.addEventListener('change', () => {
+    const checked = selectAllCheckbox.checked;
+    pageContactIds.forEach(id => {
+      if (checked) {
+        selectedContactIds.add(id);
+      } else {
+        selectedContactIds.delete(id);
+      }
+    });
+
+    // Update all row checkboxes and row highlighting
+    document.querySelectorAll('.contact-checkbox').forEach(cb => {
+      (cb as HTMLInputElement).checked = checked;
+      const row = (cb as HTMLElement).closest('tr');
+      if (row) row.classList.toggle('selected', checked);
+    });
+
+    updateDeleteButton();
+  });
+
+  // Individual checkboxes
+  document.querySelectorAll('.contact-checkbox').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const input = cb as HTMLInputElement;
+      const contactId = parseInt(input.dataset.contactId || '0', 10);
+      const row = input.closest('tr');
+
+      if (input.checked) {
+        selectedContactIds.add(contactId);
+        row?.classList.add('selected');
+      } else {
+        selectedContactIds.delete(contactId);
+        row?.classList.remove('selected');
+      }
+
+      // Update "Select All" checkbox state
+      const allChecked = pageContactIds.every(id => selectedContactIds.has(id));
+      if (selectAllCheckbox) selectAllCheckbox.checked = allChecked;
+
+      updateDeleteButton();
+    });
+  });
+}
+
+function updateDeleteButton(): void {
+  const btn = document.getElementById('deleteSelectedBtn');
+  const countEl = document.getElementById('deleteCount');
+  if (!btn) return;
+
+  const count = selectedContactIds.size;
+  if (count > 0) {
+    btn.classList.add('show');
+    if (countEl) countEl.textContent = count.toString();
+  } else {
+    btn.classList.remove('show');
+  }
+}
+
+function clearSelection(): void {
+  selectedContactIds.clear();
+  updateDeleteButton();
+}
+
+function openDeleteModal(): void {
+  const count = selectedContactIds.size;
+  if (count === 0) return;
+
+  const countEl = document.getElementById('deleteConfirmCount');
+  if (countEl) countEl.textContent = count.toString();
+
+  document.getElementById('deleteConfirmModal')?.classList.add('active');
+}
+
+function closeDeleteModal(): void {
+  document.getElementById('deleteConfirmModal')?.classList.remove('active');
+}
+
+async function confirmBulkDelete(): Promise<void> {
+  if (selectedContactIds.size === 0) return;
+
+  const confirmBtn = document.getElementById('confirmDeleteBtn') as HTMLButtonElement;
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = 'Deleting...';
+
+  try {
+    const response = await fetch(`${API_BASE}/contacts/bulk-delete`, {
+      method: 'POST',
+      headers: window.authService.getAuthHeaders(),
+      body: JSON.stringify({ contact_ids: Array.from(selectedContactIds) }),
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.authService.logout();
+        window.location.href = '/index.html';
+        return;
+      }
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to delete contacts');
+    }
+
+    const result = await response.json();
+
+    closeDeleteModal();
+    clearSelection();
+    alert(`✅ Successfully deleted ${result.deleted_count} contact(s).`);
+    loadContacts();
+    loadStats();
+  } catch (err) {
+    alert(`❌ ${err instanceof Error ? err.message : 'Failed to delete contacts'}`);
+  } finally {
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = '🗑️ Delete';
+  }
 }

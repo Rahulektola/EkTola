@@ -126,3 +126,14 @@ class ContactSegmentStats(BaseModel):
     segment: SegmentType
     count: int
     opted_out_count: int
+
+
+class ContactBulkDelete(BaseModel):
+    """Bulk delete contacts request"""
+    contact_ids: List[int] = Field(..., min_items=1, description="List of contact IDs to delete")
+
+
+class ContactBulkDeleteResponse(BaseModel):
+    """Bulk delete contacts response"""
+    deleted_count: int
+    message: str = "Contacts deleted successfully"

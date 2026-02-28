@@ -9,7 +9,8 @@ from app.models.contact import Contact
 from app.schemas.contact import (
     ContactCreate, ContactUpdate, ContactResponse,
     ContactListResponse, ContactImportReport, ContactSegmentStats,
-    DashboardContactCreate, DashboardContactResponse, DashboardBulkUploadReport
+    DashboardContactCreate, DashboardContactResponse, DashboardBulkUploadReport,
+    ContactBulkDelete, ContactBulkDeleteResponse
 )
 from app.utils.enums import SegmentType, Language
 from app.utils.whatsapp import normalize_phone_number, validate_phone_number
@@ -421,6 +422,41 @@ def get_contact_stats(
         )
         for stat in stats
     ]
+
+
+@router.post("/bulk-delete", response_model=ContactBulkDeleteResponse)
+def bulk_delete_contacts(
+    request: ContactBulkDelete,
+    current_jeweller: Jeweller = Depends(get_current_jeweller),
+    db: Session = Depends(get_db)
+):
+    """
+    Bulk soft-delete contacts.
+    Only deletes contacts that belong to the current jeweller.
+    """
+    contacts = db.query(Contact).filter(
+        Contact.id.in_(request.contact_ids),
+        Contact.jeweller_id == current_jeweller.id,
+        Contact.is_deleted == False
+    ).all()
+
+    if not contacts:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No matching contacts found to delete"
+        )
+
+    now = datetime.utcnow()
+    for contact in contacts:
+        contact.is_deleted = True
+        contact.deleted_at = now
+
+    db.commit()
+
+    return ContactBulkDeleteResponse(
+        deleted_count=len(contacts),
+        message=f"Successfully deleted {len(contacts)} contact(s)"
+    )
 
 
 @router.get("/{contact_id}", response_model=ContactResponse)

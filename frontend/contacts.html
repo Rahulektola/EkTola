@@ -649,6 +649,92 @@
       color: var(--text-secondary);
     }
 
+    /* Checkbox & Selection */
+    .contact-checkbox-cell {
+      width: 40px;
+      text-align: center;
+    }
+
+    .contact-checkbox-cell input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: var(--primary-color);
+    }
+
+    .contacts-table tbody tr.selected {
+      background: #fef2f2;
+    }
+
+    .contacts-table tbody tr.selected:hover {
+      background: #fee2e2;
+    }
+
+    /* Delete Selected Button */
+    .btn-delete-selected {
+      background: var(--danger-color);
+      color: white;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .btn-delete-selected:hover {
+      background: #dc2626;
+    }
+
+    .btn-delete-selected.show {
+      display: inline-flex;
+    }
+
+    .delete-count-badge {
+      background: rgba(255, 255, 255, 0.25);
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    /* Delete Confirmation Modal */
+    .delete-warning-icon {
+      font-size: 48px;
+      text-align: center;
+      margin-bottom: 16px;
+    }
+
+    .delete-warning-text {
+      text-align: center;
+      font-size: 15px;
+      color: var(--text-color);
+      line-height: 1.6;
+      margin-bottom: 8px;
+    }
+
+    .delete-warning-text strong {
+      color: var(--danger-color);
+    }
+
+    .delete-warning-subtext {
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .btn-confirm-delete {
+      background: var(--danger-color);
+      color: white;
+    }
+
+    .btn-confirm-delete:hover {
+      background: #dc2626;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
       .nav-links {
@@ -713,6 +799,9 @@
         <p>Manage all your contacts and segments</p>
       </div>
       <div class="header-actions">
+        <button class="btn btn-delete-selected" id="deleteSelectedBtn">
+          🗑️ Delete Selected <span class="delete-count-badge" id="deleteCount">0</span>
+        </button>
         <button class="btn btn-secondary" id="addContactBtn">
           ➕ Add Contact
         </button>
@@ -846,6 +935,29 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" id="cancelBulkUpload">Cancel</button>
         <button class="btn btn-primary" id="submitBulkUpload" disabled>Upload Contacts</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div class="modal-overlay" id="deleteConfirmModal">
+    <div class="modal" style="max-width: 420px;">
+      <div class="modal-header">
+        <h3 class="modal-title">🗑️ Delete Contacts</h3>
+        <button class="modal-close" id="closeDeleteModal">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="delete-warning-icon">⚠️</div>
+        <div class="delete-warning-text">
+          You are about to delete <strong id="deleteConfirmCount">0</strong> contact(s).
+        </div>
+        <div class="delete-warning-subtext">
+          This action cannot be undone. The contacts will be permanently removed from your list.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelDeleteBtn">Cancel</button>
+        <button class="btn btn-confirm-delete" id="confirmDeleteBtn">🗑️ Delete</button>
       </div>
     </div>
   </div>

@@ -1,13 +1,22 @@
 """
+"""
 Create test jeweller user with phone authentication
 """
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 import bcrypt
+import os
+from dotenv import load_dotenv
 
-# Direct database connection
-engine = create_engine('postgresql://postgres:postgres@localhost:5432/ektola_db')
+load_dotenv()
+
+# Get database URL from environment
+DATABASE_URL = os.getenv('DATABASE_URL')
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable not set. Check your .env file.")
+
+engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
 
 def hash_password(password: str) -> str:

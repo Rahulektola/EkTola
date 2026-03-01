@@ -6,9 +6,17 @@ from sqlalchemy.orm import sessionmaker
 import bcrypt
 from datetime import datetime, timedelta
 import random
+import os
+from dotenv import load_dotenv
 
-# Database connection
-engine = create_engine('mysql+pymysql://root:shivektola@localhost:3306/ektola_db')
+load_dotenv()
+
+# Get database URL from environment
+DATABASE_URL = os.getenv('DATABASE_URL')
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable not set. Check your .env file.")
+
+engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
 
 def hash_password(password: str) -> str:

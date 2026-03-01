@@ -24,21 +24,29 @@ try:
     )
     
     with connection.cursor() as cursor:
-        # Update admin password
-        new_password = "Admin123!@#"
+        # Get email and new password from user
+        email = input("Enter admin email [admin@ektola.com]: ").strip() or "admin@ektola.com"
+        new_password = input("Enter new password: ").strip()
+        
+        if not new_password:
+            print("❌ Password cannot be empty!")
+            connection.close()
+            exit(1)
+        
         hashed = get_password_hash(new_password)
         
         cursor.execute("""
             UPDATE users 
             SET hashed_password = %s 
-            WHERE email = 'admin@example.com' AND is_admin = 1
-        """, (hashed,))
+            WHERE email = %s AND is_admin = 1
+        """, (hashed, email))
         connection.commit()
         
-        print("✅ Admin password reset successfully!")
-        print(f"\nLogin credentials:")
-        print(f"  Email: admin@example.com")
-        print(f"  Password: {new_password}")
+        if cursor.rowcount > 0:
+            print("✅ Admin password reset successfully!")
+            print(f"\nAdmin email: {email}")
+        else:
+            print(f"❌ No admin user found with email: {email}")
             
     connection.close()
     

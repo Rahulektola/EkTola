@@ -33,15 +33,24 @@ try:
         
         if not admins:
             print("  ❌ No admin users found!")
-            print("\nCreating admin user...")
-            from app.core.security import get_password_hash
-            hashed_password = get_password_hash("Admin123!@#")
-            cursor.execute("""
-                INSERT INTO users (email, hashed_password, is_admin, is_active, created_at, updated_at)
-                VALUES (%s, %s, 1, 1, NOW(), NOW())
-            """, ('admin@ektola.com', hashed_password))
-            connection.commit()
-            print("✅ Admin user created: admin@ektola.com / Admin123!@#")
+            create = input("\nCreate admin user? (y/n): ").strip().lower()
+            
+            if create == 'y':
+                from app.core.security import get_password_hash
+                email = input("Enter admin email [admin@ektola.com]: ").strip() or "admin@ektola.com"
+                password = input("Enter admin password: ").strip()
+                
+                if not password:
+                    print("❌ Password cannot be empty!")
+                else:
+                    hashed_password = get_password_hash(password)
+                    cursor.execute("""
+                        INSERT INTO users (email, hashed_password, is_admin, is_active, created_at, updated_at)
+                        VALUES (%s, %s, 1, 1, NOW(), NOW())
+                    """, (email, hashed_password))
+                    connection.commit()
+                    print(f"✅ Admin user created: {email}")
+                    print("⚠️  Remember to save this password securely!")
             
     connection.close()
     

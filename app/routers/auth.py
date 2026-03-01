@@ -222,7 +222,7 @@ def request_otp(
     
     # Generate 6-digit OTP
     otp_code = str(secrets.randbelow(900000) + 100000)
-    otp_expiry = datetime.utcnow() + timedelta(minutes=10)
+    otp_expiry = datetime.utcnow() + timedelta(minutes=5)
     
     user.phone_otp_code = otp_code
     user.phone_otp_expiry = otp_expiry
@@ -299,16 +299,28 @@ def verify_otp(
             detail="User not found"
         )
     
-    if not user.phone_otp_code or user.phone_otp_code != request.otp_code:
+    # Check if OTP exists
+    if not user.phone_otp_code or not user.phone_otp_expiry:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No OTP requested. Please request a new OTP."
+        )
+    
+    # Check expiry FIRST before validating the code
+    if user.phone_otp_expiry < datetime.utcnow():
+        # Clear expired OTP
+        user.phone_otp_code = None
+        user.phone_otp_expiry = None
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="OTP expired. Please request a new OTP."
+        )
+    
+    if user.phone_otp_code != request.otp_code:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid OTP"
-        )
-    
-    if user.phone_otp_expiry < datetime.utcnow():
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="OTP expired"
         )
     
     # Clear OTP
@@ -351,16 +363,28 @@ def verify_phone_otp(
             detail="Phone number not registered"
         )
     
-    if not user.phone_otp_code or user.phone_otp_code != request.otp_code:
+    # Check if OTP exists
+    if not user.phone_otp_code or not user.phone_otp_expiry:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No OTP requested. Please request a new OTP."
+        )
+    
+    # Check expiry FIRST before validating the code
+    if user.phone_otp_expiry < datetime.utcnow():
+        # Clear expired OTP
+        user.phone_otp_code = None
+        user.phone_otp_expiry = None
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="OTP expired. Please request a new OTP."
+        )
+    
+    if user.phone_otp_code != request.otp_code:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid OTP"
-        )
-    
-    if user.phone_otp_expiry < datetime.utcnow():
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="OTP expired"
         )
     
     # Clear OTP

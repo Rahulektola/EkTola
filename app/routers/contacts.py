@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, Integer
 from typing import List, Optional
 from app.database import get_db
 from app.core.dependencies import get_current_jeweller
@@ -8,14 +8,267 @@ from app.models.jeweller import Jeweller
 from app.models.contact import Contact
 from app.schemas.contact import (
     ContactCreate, ContactUpdate, ContactResponse,
-    ContactListResponse, ContactImportReport, ContactSegmentStats
+    ContactListResponse, ContactImportReport, ContactSegmentStats,
+    DashboardContactCreate, DashboardContactResponse, DashboardBulkUploadReport,
+    ContactBulkDelete, ContactBulkDeleteResponse
 )
 from app.utils.enums import SegmentType, Language
+from app.utils.whatsapp import normalize_phone_number, validate_phone_number
 import pandas as pd
 import io
 from datetime import datetime
 
 router = APIRouter(prefix="/contacts", tags=["Contacts"])
+
+
+# ============ Dashboard-Compatible Endpoints ============
+
+@router.post("/add-one", response_model=DashboardContactResponse, status_code=status.HTTP_201_CREATED)
+def add_one_contact(
+    request: DashboardContactCreate,
+    current_jeweller: Jeweller = Depends(get_current_jeweller),
+    db: Session = Depends(get_db)
+):
+    """
+    Add single contact from dashboard (simplified format)
+    Accepts: name, mobile, purpose (SIP/LOAN/BOTH), date
+    """
+    # Normalize and validate phone number
+    normalized_mobile = normalize_phone_number(request.mobile)
+    if not validate_phone_number(normalized_mobile):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid mobile number format. Use 10 digits or +91 format"
+        )
+    
+    # Map purpose to segment
+    purpose_to_segment = {
+        "SIP": SegmentType.GOLD_SIP,
+        "LOAN": SegmentType.GOLD_LOAN,
+        "BOTH": SegmentType.BOTH
+    }
+    
+    segment = purpose_to_segment.get(request.purpose, SegmentType.MARKETING)
+    
+    # Check if contact exists — merge segments instead of rejecting
+    existing = db.query(Contact).filter(
+        Contact.jeweller_id == current_jeweller.id,
+        Contact.phone_number == normalized_mobile
+    ).first()
+    
+    if existing:
+        # Merge segment with existing record
+        existing.segment = SegmentType.merge(existing.segment, segment)
+        existing.name = request.name or existing.name
+        existing.notes = f"Purpose: {request.purpose}, Date: {request.date}"
+        existing.updated_at = datetime.utcnow()
+        if existing.is_deleted:
+            existing.is_deleted = False
+            existing.deleted_at = None
+        db.commit()
+        db.refresh(existing)
+        
+        return DashboardContactResponse(
+            id=existing.id,
+            name=existing.name,
+            mobile=existing.phone_number,
+            purpose=request.purpose,
+            date=request.date,
+            created_at=existing.created_at
+        )
+    
+    # Create new contact
+    new_contact = Contact(
+        jeweller_id=current_jeweller.id,
+        phone_number=normalized_mobile,
+        name=request.name,
+        segment=segment,
+        preferred_language=Language.ENGLISH,  # Default
+        notes=f"Purpose: {request.purpose}, Date: {request.date}"
+    )
+    db.add(new_contact)
+    db.commit()
+    db.refresh(new_contact)
+    
+    # Return dashboard format
+    return DashboardContactResponse(
+        id=new_contact.id,
+        name=new_contact.name,
+        mobile=new_contact.phone_number,
+        purpose=request.purpose,
+        date=request.date,
+        created_at=new_contact.created_at
+    )
+
+
+@router.post("/bulk-upload-dashboard", response_model=DashboardBulkUploadReport)
+async def bulk_upload_dashboard(
+    file: UploadFile = File(...),
+    current_jeweller: Jeweller = Depends(get_current_jeweller),
+    db: Session = Depends(get_db)
+):
+    """
+    Bulk upload contacts from dashboard
+    Expected columns: Name, Mobile, Purpose, Date
+    Purpose can be: SIP, LOAN, or BOTH
+    """
+    if not file.filename.endswith(('.csv', '.xlsx', '.xls')):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only CSV and Excel files are supported"
+        )
+    
+    # Read file
+    contents = await file.read()
+    try:
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(contents))
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to read file: {str(e)}"
+        )
+    
+    # Normalize column names (case-insensitive)
+    df.columns = df.columns.str.strip().str.lower()
+    
+    # Check for required columns
+    required_columns = ['name', 'mobile', 'purpose']
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    if missing_columns:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Missing required columns: {', '.join(missing_columns)}. Expected: Name, Mobile, Purpose, Date"
+        )
+    
+    total_rows = len(df)
+    imported = 0
+    updated = 0
+    merged = 0  # intra-CSV duplicates collapsed
+    failed = 0
+    failure_details = []
+    
+    # Map purpose to segment
+    purpose_to_segment = {
+        "SIP": SegmentType.GOLD_SIP,
+        "LOAN": SegmentType.GOLD_LOAN,
+        "BOTH": SegmentType.BOTH
+    }
+    
+    # ---- Phase 1: Validate all rows and pre-merge intra-CSV duplicates ----
+    # Maps normalized_mobile -> {name, segment, notes, original_rows}
+    deduped: dict = {}  # phone -> merged record
+    
+    for idx, row in df.iterrows():
+        try:
+            name = str(row.get('name', '')).strip()
+            mobile = str(row.get('mobile', '')).strip()
+            purpose = str(row.get('purpose', '')).strip().upper()
+            date_val = str(row.get('date', '')) if 'date' in df.columns else ''
+            
+            if not mobile or not name:
+                raise ValueError("Name and mobile are required")
+            
+            if purpose not in ['SIP', 'LOAN', 'BOTH']:
+                raise ValueError(f"Invalid purpose: {purpose}. Must be SIP, LOAN, or BOTH")
+            
+            normalized_mobile = normalize_phone_number(mobile)
+            if not validate_phone_number(normalized_mobile):
+                raise ValueError(f"Invalid mobile number format: {mobile}")
+            
+            segment = purpose_to_segment.get(purpose, SegmentType.MARKETING)
+            
+            if normalized_mobile in deduped:
+                # Merge with existing entry in same CSV
+                entry = deduped[normalized_mobile]
+                entry['segment'] = SegmentType.merge(entry['segment'], segment)
+                entry['name'] = entry['name'] or name  # keep first non-empty name
+                if date_val and date_val != 'nan':
+                    entry['notes'] += f", Date: {date_val}"
+                entry['original_rows'].append(idx + 2)
+                merged += 1
+            else:
+                deduped[normalized_mobile] = {
+                    'name': name,
+                    'segment': segment,
+                    'notes': f"Purpose: {purpose}, Date: {date_val}",
+                    'original_rows': [idx + 2],
+                }
+        
+        except Exception as e:
+            failed += 1
+            failure_details.append({
+                "row": idx + 2,
+                "name": str(row.get('name', 'N/A')),
+                "mobile": str(row.get('mobile', 'N/A')),
+                "reason": str(e)
+            })
+    
+    # ---- Phase 2: Upsert deduplicated records into DB, merging with existing ----
+    for normalized_mobile, entry in deduped.items():
+        try:
+            existing = db.query(Contact).filter(
+                Contact.jeweller_id == current_jeweller.id,
+                Contact.phone_number == normalized_mobile
+            ).first()
+            
+            if existing:
+                # Merge segment with existing DB record
+                existing.segment = SegmentType.merge(existing.segment, entry['segment'])
+                existing.name = entry['name'] or existing.name
+                existing.notes = entry['notes']
+                existing.updated_at = datetime.utcnow()
+                if existing.is_deleted:
+                    existing.is_deleted = False
+                    existing.deleted_at = None
+                updated += 1
+            else:
+                new_contact = Contact(
+                    jeweller_id=current_jeweller.id,
+                    phone_number=normalized_mobile,
+                    name=entry['name'],
+                    segment=entry['segment'],
+                    preferred_language=Language.ENGLISH,
+                    notes=entry['notes']
+                )
+                db.add(new_contact)
+                imported += 1
+                print(f"[Jeweller Upload] Created contact for jeweller_id={current_jeweller.id}: {entry['name']} ({normalized_mobile})")
+        
+        except Exception as e:
+            failed += 1
+            failure_details.append({
+                "rows": entry['original_rows'],
+                "name": entry['name'],
+                "mobile": normalized_mobile,
+                "reason": str(e)
+            })
+    
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error while saving contacts: {str(e)}"
+        )
+    
+    merge_msg = f", merged {merged} duplicate(s) within file" if merged > 0 else ""
+    
+    return DashboardBulkUploadReport(
+        total_rows=total_rows,
+        imported=imported,
+        updated=updated,
+        merged=merged,
+        failed=failed,
+        failure_details=failure_details,
+        message=f"Successfully imported {imported} contacts, updated {updated}, failed {failed}{merge_msg}"
+    )
+
+
+# ============ Original Advanced Endpoints ============
 
 
 @router.post("/upload", response_model=ContactImportReport)
@@ -225,6 +478,41 @@ def get_contact_stats(
         )
         for stat in stats
     ]
+
+
+@router.post("/bulk-delete", response_model=ContactBulkDeleteResponse)
+def bulk_delete_contacts(
+    request: ContactBulkDelete,
+    current_jeweller: Jeweller = Depends(get_current_jeweller),
+    db: Session = Depends(get_db)
+):
+    """
+    Bulk soft-delete contacts.
+    Only deletes contacts that belong to the current jeweller.
+    """
+    contacts = db.query(Contact).filter(
+        Contact.id.in_(request.contact_ids),
+        Contact.jeweller_id == current_jeweller.id,
+        Contact.is_deleted == False
+    ).all()
+
+    if not contacts:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No matching contacts found to delete"
+        )
+
+    now = datetime.utcnow()
+    for contact in contacts:
+        contact.is_deleted = True
+        contact.deleted_at = now
+
+    db.commit()
+
+    return ContactBulkDeleteResponse(
+        deleted_count=len(contacts),
+        message=f"Successfully deleted {len(contacts)} contact(s)"
+    )
 
 
 @router.get("/{contact_id}", response_model=ContactResponse)

@@ -1,10 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 from contextlib import asynccontextmanager
 import asyncio
 import logging
 
-from app.routers import auth, contacts, campaigns, templates, analytics, webhooks
+from app.routers import admin, auth, contacts, campaigns, templates, analytics, webhooks, whatsapp_auth
 from app.database import engine, Base
 from app.config import settings
 
@@ -45,19 +47,29 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("🎯 Starting EkTola API")
     
-    # Start campaign scheduler as background task
-    scheduler_task = asyncio.create_task(run_campaign_scheduler())
-    logger.info("📅 Campaign scheduler initialized")
+    # TODO: Start campaign scheduler as background task (requires celery)
+    # scheduler_task = asyncio.create_task(run_campaign_scheduler())
+    # logger.info("📅 Campaign scheduler initialized")
     
     yield  # Application runs
     
     # Shutdown
     logger.info("🛑 Shutting down EkTola API")
-    scheduler_task.cancel()
-    try:
-        await scheduler_task
-    except asyncio.CancelledError:
-        logger.info("✅ Scheduler stopped")
+    # scheduler_task.cancel()
+    # try:
+    #     await scheduler_task
+    # except asyncio.CancelledError:
+    #     logger.info("✅ Scheduler stopped")
+
+# Middleware to add no-cache headers
+class NoCacheMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        # Add no-cache headers to prevent browser caching issues
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -70,17 +82,23 @@ app = FastAPI(
     lifespan=lifespan  # Add lifespan context manager
 )
 
-# CORS middleware
+# Add no-cache middleware FIRST (will be innermost)
+app.add_middleware(NoCacheMiddleware)
+
+# CORS middleware LAST (will be outermost - handles preflight requests first)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Update with specific origins in production
-    allow_credentials=True,
+    allow_origins=["*"],  # Allow all origins in development
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Include routers
+app.include_router(admin.router)
 app.include_router(auth.router)
+app.include_router(whatsapp_auth.router)
 app.include_router(contacts.router)
 app.include_router(campaigns.router)
 app.include_router(templates.router)

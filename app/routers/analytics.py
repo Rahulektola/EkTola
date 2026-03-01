@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, Integer, text
 from typing import List
 from datetime import datetime, timedelta
 from app.database import get_db
@@ -65,8 +65,10 @@ def get_jeweller_dashboard(
     ).first()
     
     recent_total = recent_stats.total or 0
-    recent_delivery_rate = (recent_stats.delivered / recent_total * 100) if recent_total > 0 else 0
-    recent_read_rate = (recent_stats.read / recent_stats.delivered * 100) if recent_stats.delivered > 0 else 0
+    recent_delivered = recent_stats.delivered or 0
+    recent_read = recent_stats.read or 0
+    recent_delivery_rate = (recent_delivered / recent_total * 100) if recent_total > 0 else 0
+    recent_read_rate = (recent_read / recent_delivered * 100) if recent_delivered > 0 else 0
     
     # Contact distribution by segment
     contact_dist = db.query(
@@ -146,25 +148,18 @@ def get_admin_dashboard(
         Contact.is_deleted == False
     ).scalar()
     
-    # Total messages
-    total_messages = db.query(func.count(Message.id)).scalar()
+    # Total messages - use COUNT(*) to avoid loading model columns
+    total_messages = db.execute(text("SELECT COUNT(*) FROM messages")).scalar() or 0
     
     # Messages last 30 days
     thirty_days_ago = datetime.utcnow() - timedelta(days=30)
-    messages_30d = db.query(func.count(Message.id)).filter(
-        Message.created_at >= thirty_days_ago
-    ).scalar()
+    messages_30d = db.execute(text("SELECT COUNT(*) FROM messages WHERE created_at >= :date"), {"date": thirty_days_ago}).scalar() or 0
     
-    # Overall delivery and read rates
-    overall_stats = db.query(
-        func.count(Message.id).label('total'),
-        func.sum(func.cast(Message.status == MessageStatus.DELIVERED, Integer)).label('delivered'),
-        func.sum(func.cast(Message.status == MessageStatus.READ, Integer)).label('read')
-    ).first()
-    
-    overall_total = overall_stats.total or 0
-    overall_delivery_rate = (overall_stats.delivered / overall_total * 100) if overall_total > 0 else 0
-    overall_read_rate = (overall_stats.read / overall_stats.delivered * 100) if overall_stats.delivered > 0 else 0
+    # Overall delivery and read rates - use raw SQL to avoid model column issues
+    overall_delivered = db.execute(text("SELECT COUNT(*) FROM messages WHERE status = 'DELIVERED'")).scalar() or 0
+    overall_read = db.execute(text("SELECT COUNT(*) FROM messages WHERE status = 'READ'")).scalar() or 0
+    overall_delivery_rate = (overall_delivered / total_messages * 100) if total_messages > 0 else 0
+    overall_read_rate = (overall_read / overall_delivered * 100) if overall_delivered > 0 else 0
     
     # Per-jeweller stats
     jeweller_stats = []
@@ -180,31 +175,23 @@ def get_admin_dashboard(
             Campaign.jeweller_id == jeweller.id
         ).scalar()
         
-        j_messages = db.query(func.count(Message.id)).filter(
-            Message.jeweller_id == jeweller.id
-        ).scalar()
+        # Use raw SQL for messages to avoid model column issues
+        j_messages = db.execute(text("SELECT COUNT(*) FROM messages WHERE jeweller_id = :jid"), {"jid": jeweller.id}).scalar() or 0
         
-        j_messages_30d = db.query(func.count(Message.id)).filter(
-            Message.jeweller_id == jeweller.id,
-            Message.created_at >= thirty_days_ago
-        ).scalar()
+        j_messages_30d = db.execute(text("SELECT COUNT(*) FROM messages WHERE jeweller_id = :jid AND created_at >= :date"), 
+                                    {"jid": jeweller.id, "date": thirty_days_ago}).scalar() or 0
         
-        j_stats = db.query(
-            func.count(Message.id).label('total'),
-            func.sum(func.cast(Message.status == MessageStatus.DELIVERED, Integer)).label('delivered'),
-            func.sum(func.cast(Message.status == MessageStatus.READ, Integer)).label('read')
-        ).filter(
-            Message.jeweller_id == jeweller.id
-        ).first()
+        j_delivered = db.execute(text("SELECT COUNT(*) FROM messages WHERE jeweller_id = :jid AND status = 'DELIVERED'"), 
+                                {"jid": jeweller.id}).scalar() or 0
+        j_read = db.execute(text("SELECT COUNT(*) FROM messages WHERE jeweller_id = :jid AND status = 'READ'"), 
+                           {"jid": jeweller.id}).scalar() or 0
         
-        j_total = j_stats.total or 0
-        j_delivery_rate = (j_stats.delivered / j_total * 100) if j_total > 0 else 0
-        j_read_rate = (j_stats.read / j_stats.delivered * 100) if j_stats.delivered > 0 else 0
+        j_delivery_rate = (j_delivered / j_messages * 100) if j_messages > 0 else 0
+        j_read_rate = (j_read / j_delivered * 100) if j_delivered > 0 else 0
         
-        # Last active (last message sent)
-        last_message = db.query(Message).filter(
-            Message.jeweller_id == jeweller.id
-        ).order_by(Message.created_at.desc()).first()
+        # Last active (last message sent) - use raw SQL
+        last_message_time = db.execute(text("SELECT MAX(created_at) FROM messages WHERE jeweller_id = :jid"), 
+                                     {"jid": jeweller.id}).scalar()
         
         jeweller_stats.append(JewellerUsageStats(
             jeweller_id=jeweller.id,
@@ -215,7 +202,7 @@ def get_admin_dashboard(
             messages_last_30_days=j_messages_30d,
             delivery_rate=round(j_delivery_rate, 2),
             read_rate=round(j_read_rate, 2),
-            last_active=last_message.created_at if last_message else None
+            last_active=last_message_time
         ))
     
     return AdminDashboardResponse(

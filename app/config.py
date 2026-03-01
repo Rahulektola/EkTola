@@ -15,15 +15,21 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str
     
-    # WhatsApp Cloud API Settings
+    # WhatsApp Business API Settings (via PyWa) - Platform Account
     WHATSAPP_API_VERSION: str = "v18.0"
-    WHATSAPP_PHONE_NUMBER_ID: str = ""  # Your WhatsApp Business Phone Number ID
-    WHATSAPP_ACCESS_TOKEN: str = ""  # Your WhatsApp Business API access token
-    WHATSAPP_BUSINESS_ACCOUNT_ID: str = ""  # WhatsApp Business Account ID for template management
+    WHATSAPP_PHONE_NUMBER_ID: str = ""  # Platform WhatsApp Phone Number ID (for OTPs)
+    WHATSAPP_ACCESS_TOKEN: str = ""  # Platform WhatsApp API access token
+    WHATSAPP_BUSINESS_ACCOUNT_ID: str = ""  # Platform WABA ID for template management
     WHATSAPP_APP_ID: str = ""  # Facebook App ID
     WHATSAPP_APP_SECRET: str = ""  # Facebook App Secret
-    WHATSAPP_WEBHOOK_VERIFY_TOKEN: str = ""  # Token for webhook verification
+    WHATSAPP_WEBHOOK_VERIFY_TOKEN: str = ""  # Platform webhook verification token
     WHATSAPP_OTP_TEMPLATE_NAME: str = "otp_verification"  # Approved template name
+    
+    # WhatsApp Embedded Signup Settings
+    WHATSAPP_TOKEN_ENCRYPTION_KEY: str = ""  # Fernet key for encrypting jeweller tokens
+    FACEBOOK_CONFIG_ID: str = ""  # Facebook Embedded Signup Configuration ID
+    WHATSAPP_CALLBACK_BASE_URL: str = ""  # Base URL for OAuth callbacks (e.g., https://yourdomain.com)
+    WHATSAPP_SYSTEM_USER_TOKEN: str = ""  # System User Token for token exchange
     
     # Environment
     ENVIRONMENT: str = "development"

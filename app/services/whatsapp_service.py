@@ -2,12 +2,15 @@
 WhatsApp Service using PyWa Library (v3.8.0+)
 Handles messaging, template management, and webhook processing
 Uses pywa_async for async support with FastAPI
+Now supports multi-tenant: per-jeweller WhatsApp clients + platform client
 """
 import logging
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 
 import httpx
+from sqlalchemy.orm import Session
 
 try:
     from pywa_async import WhatsApp
@@ -103,9 +106,200 @@ def get_template_language(language_code: str) -> Optional[Any]:
     return TemplateLanguage.ENGLISH_US
 
 
+# ==================== MULTI-TENANT CLIENT MANAGEMENT ====================
+
+def get_jeweller_whatsapp_client(jeweller_id: int, db: Session) -> Optional[Any]:
+    """
+    Get WhatsApp client for a specific jeweller.
+    Uses jeweller's own WABA credentials.
+    
+    Args:
+        jeweller_id: ID of the jeweller
+        db: Database session
+        
+    Returns:
+        WhatsApp client instance or None if not configured
+        
+    Raises:
+        WhatsAppServiceError: If jeweller not found or credentials invalid
+    """
+    from app.models.jeweller import Jeweller
+    from app.core.encryption import decrypt_token, TokenEncryptionError
+    
+    if not PYWA_AVAILABLE:
+        logger.warning(f"PyWa library not available for jeweller {jeweller_id}")
+        return None
+    
+    # Get jeweller
+    jeweller = db.query(Jeweller).filter(Jeweller.id == jeweller_id).first()
+    if not jeweller:
+        raise WhatsAppServiceError(f"Jeweller {jeweller_id} not found")
+    
+    # Check if WhatsApp is connected
+    if not jeweller.waba_id or not jeweller.phone_number_id or not jeweller.access_token:
+        raise WhatsAppServiceError(
+            f"WhatsApp not connected for jeweller {jeweller_id}",
+            error_code="WHATSAPP_NOT_CONNECTED"
+        )
+    
+    # Check token expiry
+    if jeweller.access_token_expires_at:
+        if jeweller.access_token_expires_at < datetime.utcnow():
+            raise WhatsAppServiceError(
+                f"WhatsApp access token expired for jeweller {jeweller_id}",
+                error_code="TOKEN_EXPIRED"
+            )
+        
+        # Warn if token expires soon (within 7 days)
+        days_until_expiry = (jeweller.access_token_expires_at - datetime.utcnow()).days
+        if days_until_expiry < 7:
+            logger.warning(f"WhatsApp token for jeweller {jeweller_id} expires in {days_until_expiry} days")
+    
+    # Decrypt access token
+    try:
+        decrypted_token = decrypt_token(jeweller.access_token)
+    except TokenEncryptionError as e:
+        logger.error(f"Failed to decrypt token for jeweller {jeweller_id}: {str(e)}")
+        raise WhatsAppServiceError(
+            f"Failed to decrypt WhatsApp token for jeweller {jeweller_id}",
+            error_code="DECRYPTION_FAILED"
+        )
+    
+    # Create and return WhatsApp client
+    try:
+        client = WhatsApp(
+            phone_id=jeweller.phone_number_id,
+            token=decrypted_token,
+            business_account_id=jeweller.waba_id
+        )
+        logger.info(f"WhatsApp client created for jeweller {jeweller_id}")
+        return client
+    except Exception as e:
+        logger.error(f"Failed to create WhatsApp client for jeweller {jeweller_id}: {str(e)}")
+        raise WhatsAppServiceError(
+            f"Failed to create WhatsApp client: {str(e)}",
+            error_code="CLIENT_CREATION_FAILED"
+        )
+
+
+def get_platform_whatsapp_client() -> Optional[Any]:
+    """
+    Get the platform WhatsApp client for OTPs and admin notifications.
+    Uses global platform credentials from settings.
+    
+    Returns:
+        WhatsApp client instance or None if not configured
+    """
+    if not PYWA_AVAILABLE:
+        logger.warning("PyWa library not available for platform client")
+        return None
+    
+    if not settings.WHATSAPP_PHONE_NUMBER_ID or not settings.WHATSAPP_ACCESS_TOKEN:
+        logger.warning("Platform WhatsApp credentials not configured")
+        return None
+    
+    try:
+        client = WhatsApp(
+            phone_id=settings.WHATSAPP_PHONE_NUMBER_ID,
+            token=settings.WHATSAPP_ACCESS_TOKEN,
+            business_account_id=settings.WHATSAPP_BUSINESS_ACCOUNT_ID or None
+        )
+        return client
+    except Exception as e:
+        logger.error(f"Failed to create platform WhatsApp client: {str(e)}")
+        return None
+
+
+async def send_admin_notification(jeweller_id: int, event: str, db: Session) -> bool:
+    """
+    Send WhatsApp notification to all admins about jeweller events.
+    Uses platform WhatsApp account.
+    
+    Args:
+        jeweller_id: ID of the jeweller triggering the event
+        event: Event type (e.g., "whatsapp_connected", "registration_pending")
+        db: Database session
+        
+    Returns:
+        True if at least one notification was sent successfully
+    """
+    from app.models.user import User
+    from app.models.jeweller import Jeweller
+    from app.services.whatsapp_service import WhatsAppService
+    
+    try:
+        # Get jeweller info
+        jeweller = db.query(Jeweller).filter(Jeweller.id == jeweller_id).first()
+        if not jeweller:
+            logger.error(f"Jeweller {jeweller_id} not found for admin notification")
+            return False
+        
+        # Get all admin users
+        admins = db.query(User).filter(User.is_admin == True, User.is_active == True).all()
+        if not admins:
+            logger.warning("No active admins found to notify")
+            return False
+        
+        # Build notification message
+        if event == "whatsapp_connected":
+            message = (
+                f"🔗 *WhatsApp Connected*\n\n"
+                f"Jeweller: {jeweller.business_name}\n"
+                f"ID: {jeweller_id}\n"
+                f"Phone: {jeweller.phone_display_number or 'N/A'}\n"
+                f"WABA: {jeweller.waba_name or jeweller.waba_id}\n\n"
+                f"The jeweller has successfully connected their WhatsApp Business Account."
+            )
+        elif event == "registration_pending":
+            message = (
+                f"📝 *New Registration*\n\n"
+                f"Jeweller: {jeweller.business_name}\n"
+                f"Phone: {jeweller.phone_number}\n\n"
+                f"Awaiting approval."
+            )
+        else:
+            message = f"📢 Event: {event}\nJeweller: {jeweller.business_name} (ID: {jeweller_id})"
+        
+        # Get platform client
+        client = get_platform_whatsapp_client()
+        if not client:
+            logger.warning("Platform WhatsApp client not available for admin notification")
+            return False
+        
+        # Send to all admins
+        success_count = 0
+        for admin in admins:
+            if not admin.phone_number:
+                continue
+            
+            try:
+                await client.send_message(
+                    to=admin.phone_number,
+                    text=message
+                )
+                success_count += 1
+                logger.info(f"Admin notification sent to {admin.email}")
+            except Exception as e:
+                logger.error(f"Failed to send admin notification to {admin.email}: {str(e)}")
+        
+        return success_count > 0
+        
+    except Exception as e:
+        logger.error(f"Failed to send admin notification: {str(e)}")
+        return False
+
+
 class WhatsAppService:
     """
     WhatsApp Cloud API Service using PyWa library (v3.8.0+)
+    
+    This class provides the PLATFORM WhatsApp client for:
+    - OTP messages (authentication)
+    - Admin notifications
+    - System messages
+    
+    For jeweller-specific messaging (campaigns), use get_jeweller_whatsapp_client()
+    
     Provides messaging, template management, and status tracking
     Uses pywa_async for async operations
     """
@@ -114,18 +308,18 @@ class WhatsAppService:
     _client: Optional[Any] = None
     
     def __new__(cls):
-        """Singleton pattern for WhatsApp client"""
+        """Singleton pattern for platform WhatsApp client"""
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
     
     def __init__(self):
-        """Initialize WhatsApp client if not already done"""
+        """Initialize platform WhatsApp client if not already done"""
         if self._client is None:
             self._initialize_client()
     
     def _initialize_client(self) -> None:
-        """Initialize the PyWa async WhatsApp client"""
+        """Initialize the PyWa async WhatsApp client for PLATFORM use (OTPs, admin messages)"""
         if not PYWA_AVAILABLE:
             logger.warning("PyWa library not available. Running in development mode.")
             self._client = None
@@ -514,54 +708,31 @@ class WhatsAppService:
             return []
         
         try:
-            # Use pywa 3.x get_templates if available, otherwise use direct API
-            if hasattr(self._client, 'get_templates'):
-                templates_result = await self._client.get_templates()
-                template_list = []
-                for template in templates_result:
-                    template_dict = {
-                        "id": template.id if hasattr(template, 'id') else None,
-                        "name": template.name if hasattr(template, 'name') else None,
-                        "status": template.status.value if hasattr(template, 'status') else None,
-                        "category": template.category.value if hasattr(template, 'category') else None,
-                        "language": template.language.value if hasattr(template, 'language') else None,
-                        "components": template.components if hasattr(template, 'components') else [],
-                    }
-                    template_list.append(template_dict)
-                return template_list
+            # Use PyWa library exclusively for template management
+            if not hasattr(self._client, 'get_templates'):
+                logger.error("PyWa client does not support get_templates - ensure PyWa 3.8.0+ is installed")
+                return []
             
-            # Fallback to direct API call
-            url = f"https://graph.facebook.com/v21.0/{settings.WHATSAPP_BUSINESS_ACCOUNT_ID}/message_templates"
-            
-            headers = {
-                "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
-            }
-            
-            params = {
-                "limit": limit,
-            }
-            
-            if status_filter:
-                params["status"] = status_filter
-            
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url, headers=headers, params=params)
-                response.raise_for_status()
-                result = response.json()
-            
+            templates_result = await self._client.get_templates()
             template_list = []
-            for template in result.get("data", []):
+            for template in templates_result:
                 template_dict = {
-                    "id": template.get("id"),
-                    "name": template.get("name"),
-                    "status": template.get("status"),
-                    "category": template.get("category"),
-                    "language": template.get("language"),
-                    "components": template.get("components", []),
+                    "id": template.id if hasattr(template, 'id') else None,
+                    "name": template.name if hasattr(template, 'name') else None,
+                    "status": template.status.value if hasattr(template, 'status') else None,
+                    "category": template.category.value if hasattr(template, 'category') else None,
+                    "language": template.language.value if hasattr(template, 'language') else None,
+                    "components": template.components if hasattr(template, 'components') else [],
                 }
+                # Apply status filter if specified
+                if status_filter and template_dict["status"] != status_filter:
+                    continue
                 template_list.append(template_dict)
+                # Apply limit
+                if len(template_list) >= limit:
+                    break
             
-            logger.info(f"Retrieved {len(template_list)} templates")
+            logger.info(f"Retrieved {len(template_list)} templates via PyWa")
             return template_list
             
         except httpx.HTTPStatusError as e:
@@ -672,30 +843,27 @@ class WhatsAppService:
                     "buttons": button_list,
                 })
             
-            # API endpoint for template creation
-            url = f"https://graph.facebook.com/v21.0/{settings.WHATSAPP_BUSINESS_ACCOUNT_ID}/message_templates"
+            # Use PyWa library exclusively - create_template method
+            if not hasattr(self._client, 'create_template'):
+                logger.error("PyWa client does not support create_template - ensure PyWa 3.8.0+ is installed")
+                return TemplateResult(
+                    success=False,
+                    template_name=name,
+                    error="Template creation not supported by PyWa client",
+                )
             
-            headers = {
-                "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
-                "Content-Type": "application/json",
-            }
+            # PyWa create_template accepts structured component data
+            result = await self._client.create_template(
+                name=name,
+                category=category.upper(),
+                language=language,
+                components=components,
+            )
             
-            payload = {
-                "name": name,
-                "category": category.upper(),
-                "language": language,
-                "components": components,
-            }
-            
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(url, json=payload, headers=headers)
-                response.raise_for_status()
-                result = response.json()
-            
-            logger.info(f"Template created successfully: {name}")
+            logger.info(f"Template created successfully via PyWa: {name}")
             return TemplateResult(
                 success=True,
-                template_id=result.get("id"),
+                template_id=result.get("id") if isinstance(result, dict) else getattr(result, 'id', None),
                 template_name=name,
                 status="PENDING",
             )
@@ -744,31 +912,17 @@ class WhatsAppService:
             )
         
         try:
-            # Use pywa 3.x delete_template if available
-            if hasattr(self._client, 'delete_template'):
-                await self._client.delete_template(template_name=template_name)
-                logger.info(f"Template deleted successfully: {template_name}")
+            # Use PyWa library exclusively for template deletion
+            if not hasattr(self._client, 'delete_template'):
+                logger.error("PyWa client does not support delete_template - ensure PyWa 3.8.0+ is installed")
                 return TemplateResult(
-                    success=True,
+                    success=False,
                     template_name=template_name,
+                    error="Template deletion not supported by PyWa client",
                 )
             
-            # Fallback to direct API call
-            url = f"https://graph.facebook.com/v21.0/{settings.WHATSAPP_BUSINESS_ACCOUNT_ID}/message_templates"
-            
-            headers = {
-                "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
-            }
-            
-            params = {
-                "name": template_name,
-            }
-            
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.delete(url, headers=headers, params=params)
-                response.raise_for_status()
-            
-            logger.info(f"Template deleted successfully: {template_name}")
+            await self._client.delete_template(template_name=template_name)
+            logger.info(f"Template deleted successfully via PyWa: {template_name}")
             return TemplateResult(
                 success=True,
                 template_name=template_name,

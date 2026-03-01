@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class TemplateService:
     """
     Service for managing WhatsApp templates
-    Handles synchronization between WhatsApp Cloud API and local database
+    Handles synchronization between WhatsApp Business API (via PyWa) and local database
     """
     
     def __init__(self, db: Session):

@@ -1,5 +1,5 @@
 """
-WhatsApp Cloud API Integration
+WhatsApp Integration via PyWa Library
 Handles OTP sending via WhatsApp Business API using PyWa library
 """
 import re
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 async def send_whatsapp_otp(phone_number: str, otp_code: str) -> dict:
     """
-    Send OTP via WhatsApp using Cloud API (PyWa library)
+    Send OTP via WhatsApp using PyWa library
     
     Args:
         phone_number: E.164 format phone number (e.g., +919876543210)

@@ -4,13 +4,16 @@ from app.database import get_db
 from app.config import settings
 from app.models.webhook import WebhookEvent
 from app.models.message import Message
+from app.models.jeweller import Jeweller
 from app.utils.enums import MessageStatus
 from app.services.template_service import MessageService
 import json
 import hmac
 import hashlib
 from datetime import datetime
+import logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
 
 
@@ -47,8 +50,10 @@ async def whatsapp_webhook(
     db: Session = Depends(get_db)
 ):
     """
-    WhatsApp Cloud API webhook endpoint
-    Receives message status updates from WhatsApp
+    WhatsApp webhook endpoint for receiving message status updates (Multi-tenant)
+    Receives callbacks from WhatsApp Business API for both platform and jeweller accounts
+    
+    Routes callbacks to correct jeweller based on phone_number_id in payload
     
     This endpoint should be registered in WhatsApp Business Account settings
     """
@@ -67,10 +72,42 @@ async def whatsapp_webhook(
     payload = json.loads(raw_payload)
     payload_str = json.dumps(payload)
     
-    # Store webhook event
+    # Try to identify jeweller from payload
+    jeweller_id = None
+    phone_number_id = None
+    
+    try:
+        if "entry" in payload:
+            for entry in payload["entry"]:
+                if "changes" in entry:
+                    for change in entry["changes"]:
+                        if change.get("field") == "messages":
+                            value = change.get("value", {})
+                            metadata = value.get("metadata", {})
+                            phone_number_id = metadata.get("phone_number_id")
+                            
+                            if phone_number_id:
+                                # Find jeweller by phone_number_id
+                                jeweller = db.query(Jeweller).filter(
+                                    Jeweller.phone_number_id == phone_number_id
+                                ).first()
+                                
+                                if jeweller:
+                                    jeweller_id = jeweller.id
+                                    logger.info(f"Webhook routed to jeweller {jeweller_id} (phone_number_id: {phone_number_id})")
+                                else:
+                                    logger.info(f"Webhook for platform phone_number_id: {phone_number_id}")
+                            break
+                    if jeweller_id:
+                        break
+    except Exception as e:
+        logger.error(f"Error identifying jeweller from webhook payload: {str(e)}")
+    
+    # Store webhook event with jeweller context
     webhook_event = WebhookEvent(
         event_type="message_status",
         payload=payload_str,
+        jeweller_id=jeweller_id,
         received_at=datetime.utcnow()
     )
     db.add(webhook_event)
@@ -160,26 +197,49 @@ def whatsapp_webhook_verify(
     db: Session = Depends(get_db)
 ):
     """
-    WhatsApp webhook verification endpoint
+    WhatsApp webhook verification endpoint (Multi-tenant)
     Required for setting up webhook in WhatsApp Business Account
+    
+    Supports both:
+    - Platform webhook verification (platform WABA)
+    - Jeweller-specific webhook verification (per-jeweller WABA)
     
     Query params:
     - hub.mode: "subscribe"
-    - hub.verify_token: Your verify token
+    - hub.verify_token: Verify token (platform or jeweller-specific)
     - hub.challenge: Challenge string to echo back
     """
     mode = request.query_params.get("hub.mode")
     token = request.query_params.get("hub.verify_token")
     challenge = request.query_params.get("hub.challenge")
     
-    # Validate token against configured verify token
-    expected_token = settings.WHATSAPP_WEBHOOK_VERIFY_TOKEN
+    if mode != "subscribe" or not challenge:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid verification request"
+        )
     
-    if mode == "subscribe" and challenge:
-        # In development, accept if no token configured
-        if not expected_token or token == expected_token:
+    # Try jeweller-specific tokens first
+    if token:
+        jeweller = db.query(Jeweller).filter(
+            Jeweller.webhook_verify_token == token
+        ).first()
+        
+        if jeweller:
+            logger.info(f"Webhook verification successful for jeweller {jeweller.id}")
             return int(challenge)
     
+    # Fallback to platform token
+    if settings.WHATSAPP_WEBHOOK_VERIFY_TOKEN:
+        if token == settings.WHATSAPP_WEBHOOK_VERIFY_TOKEN:
+            logger.info("Webhook verification successful for platform")
+            return int(challenge)
+    elif not settings.WHATSAPP_WEBHOOK_VERIFY_TOKEN:
+        # Development mode: accept any token if platform token not configured
+        logger.warning("Development mode: Accepting webhook verification without token check")
+        return int(challenge)
+    
+    logger.warning(f"Webhook verification failed with token: {token[:10]}...")
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail="Verification failed"

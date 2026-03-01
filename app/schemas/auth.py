@@ -98,3 +98,34 @@ class AdminRegisterRequest(BaseModel):
     password: str
     full_name: str
     access_code: str
+
+
+# ============ WhatsApp Embedded Signup Schemas ============
+
+class WhatsAppConfigResponse(BaseModel):
+    """Facebook SDK configuration for Embedded Signup"""
+    appId: str
+    configId: str
+    redirectUri: str
+    state: str  # Signed JWT token
+
+
+class WhatsAppCallbackRequest(BaseModel):
+    """Callback request from Facebook Embedded Signup"""
+    code: str  # Authorization code
+    state: str  # State token from config
+
+
+class WhatsAppCallbackResponse(BaseModel):
+    """Response after completing Embedded Signup"""
+    success: bool
+    waba_id: Optional[str] = None
+    phone_display_number: Optional[str] = None
+    business_name: Optional[str] = None
+    error: Optional[str] = None
+
+
+class WhatsAppDisconnectResponse(BaseModel):
+    """Response after disconnecting WhatsApp"""
+    success: bool
+    message: str

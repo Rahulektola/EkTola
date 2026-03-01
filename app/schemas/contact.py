@@ -46,6 +46,7 @@ class DashboardBulkUploadReport(BaseModel):
     total_rows: int
     imported: int
     updated: int
+    merged: int = 0  # intra-CSV duplicates that were collapsed
     failed: int
     failure_details: List[dict] = Field(default_factory=list)
     message: str = "Upload completed"
@@ -126,3 +127,14 @@ class ContactSegmentStats(BaseModel):
     segment: SegmentType
     count: int
     opted_out_count: int
+
+
+class ContactBulkDelete(BaseModel):
+    """Bulk delete contacts request"""
+    contact_ids: List[int] = Field(..., min_items=1, description="List of contact IDs to delete")
+
+
+class ContactBulkDeleteResponse(BaseModel):
+    """Bulk delete contacts response"""
+    deleted_count: int
+    message: str = "Contacts deleted successfully"

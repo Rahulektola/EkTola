@@ -26,6 +26,7 @@ from app.schemas.admin import (
     AdminCampaignCreateRequest, AdminCampaignListResponse, AdminCampaignsPageResponse,
     AdminMessageResponse, AdminMessagesPageResponse,
     ImpersonateResponse, JewellerAnalyticsResponse,
+    WhatsAppStatusResponse,
 )
 
 import pandas as pd
@@ -388,6 +389,74 @@ def get_jeweller_contacts(
     )
 
 
+@router.get("/jewellers/{jeweller_id}/contacts/diagnostics")
+def get_jeweller_contacts_diagnostics(
+    jeweller_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """
+    Diagnostic endpoint to debug contact display issues.
+    Returns detailed information about contacts for a jeweller.
+    """
+    jeweller = _get_jeweller_or_404(db, jeweller_id)
+    
+    # Get total contact counts with different filters
+    total_all = db.query(Contact).filter(Contact.jeweller_id == jeweller_id).count()
+    total_active = db.query(Contact).filter(
+        Contact.jeweller_id == jeweller_id,
+        Contact.is_deleted == False
+    ).count()
+    total_deleted = db.query(Contact).filter(
+        Contact.jeweller_id == jeweller_id,
+        Contact.is_deleted == True
+    ).count()
+    
+    # Get sample contacts
+    sample_contacts = db.query(Contact).filter(
+        Contact.jeweller_id == jeweller_id,
+        Contact.is_deleted == False
+    ).order_by(Contact.created_at.desc()).limit(5).all()
+    
+    # Get contact distribution by segment
+    segment_distribution = db.query(
+        Contact.segment,
+        func.count(Contact.id).label('count')
+    ).filter(
+        Contact.jeweller_id == jeweller_id,
+        Contact.is_deleted == False
+    ).group_by(Contact.segment).all()
+    
+    return {
+        "jeweller_id": jeweller_id,
+        "jeweller_name": jeweller.business_name,
+        "diagnostics": {
+            "total_contacts_all": total_all,
+            "total_contacts_active": total_active,
+            "total_contacts_deleted": total_deleted,
+            "segment_distribution": [
+                {"segment": s.segment, "count": s.count} 
+                for s in segment_distribution
+            ],
+            "sample_contacts": [
+                {
+                    "id": c.id,
+                    "name": c.name,
+                    "phone_number": c.phone_number,
+                    "segment": c.segment,
+                    "created_at": c.created_at.isoformat(),
+                    "is_deleted": c.is_deleted,
+                }
+                for c in sample_contacts
+            ],
+        },
+        "api_test": {
+            "endpoint": f"/admin/jewellers/{jeweller_id}/contacts",
+            "message": "Use this endpoint to fetch contacts normally"
+        }
+    }
+
+
 @router.post("/jewellers/{jeweller_id}/contacts/upload")
 async def admin_upload_contacts(
     jeweller_id: int,
@@ -481,6 +550,7 @@ async def admin_upload_contacts(
                 )
                 db.add(new_contact)
                 imported += 1
+                print(f"[Admin Upload] Created contact for jeweller_id={jeweller_id}: {name} ({normalized_mobile})")
 
         except Exception as e:
             failed += 1
@@ -908,4 +978,54 @@ def get_jeweller_analytics(
         read_rate=round(read_rate, 2),
         campaign_success_rates=campaign_success_rates,
         daily_message_volume=daily_message_volume,
+    )
+
+
+# ==================== 11. WHATSAPP STATUS ====================
+
+@router.get("/jewellers/{jeweller_id}/whatsapp-status", response_model=WhatsAppStatusResponse)
+def get_jeweller_whatsapp_status(
+    jeweller_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """
+    Get WhatsApp connection status for a jeweller.
+    
+    Shows:
+    - Connection status
+    - WABA details
+    - Phone number details
+    - Token expiry information
+    - Business verification status
+    
+    **Admin only**
+    """
+    jeweller = _get_jeweller_or_404(db, jeweller_id)
+    
+    # Check if WhatsApp is connected
+    connected = bool(
+        jeweller.waba_id and 
+        jeweller.phone_number_id and 
+        jeweller.access_token
+    )
+    
+    # Calculate token expiry days
+    token_expires_in_days = None
+    if jeweller.access_token_expires_at:
+        delta = jeweller.access_token_expires_at - datetime.utcnow()
+        token_expires_in_days = delta.days
+    
+    return WhatsAppStatusResponse(
+        connected=connected,
+        waba_id=jeweller.waba_id,
+        waba_name=jeweller.waba_name,
+        phone_number_id=jeweller.phone_number_id,
+        phone_display_number=jeweller.phone_display_number,
+        business_verification_status=jeweller.business_verification_status,
+        connected_at=jeweller.whatsapp_connected_at,
+        token_expires_at=jeweller.access_token_expires_at,
+        token_expires_in_days=token_expires_in_days,
+        last_token_refresh=jeweller.last_token_refresh,
+        fb_app_scoped_user_id=jeweller.fb_app_scoped_user_id,
     )

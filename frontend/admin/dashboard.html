@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#dc2626">
+    <title>Admin Dashboard - ekTola</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <meta name="description" content="ekTola Admin Dashboard">
+    
+    <!-- Auth Service loaded via dashboard module -->
+</head>
+<body class="admin-layout">
+    <!-- Navigation Sidebar -->
+    <div id="admin-nav-container"></div>
+
+    <!-- Main Content Area -->
+    <main class="admin-main">
+        <header class="admin-header">
+            <h1>Dashboard Overview</h1>
+            <div class="user-info">
+                <span class="user-type-badge admin">Admin</span>
+                <span id="admin-email"></span>
+            </div>
+        </header>
+
+        <!-- Loading State -->
+        <div id="loading-state" class="loading-container" style="display: flex;">
+            <div class="loading-spinner"></div>
+            <p>Loading dashboard...</p>
+        </div>
+
+        <!-- Error State -->
+        <div id="error-state" class="error-container" style="display: none;">
+            <p class="error-message" style="margin-bottom: 1rem;"></p>
+            <button class="btn btn-primary" onclick="location.reload()">Retry</button>
+        </div>
+
+        <!-- Dashboard Content -->
+        <div id="dashboard-content" style="display: none;">
+        <!-- KPI Cards -->
+        <div id="kpi-container" class="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-icon">👥</div>
+                <div class="kpi-content">
+                    <div class="kpi-label">Total Jewellers</div>
+                    <div class="kpi-value" id="kpi-total-jewellers">0</div>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-icon">✅</div>
+                <div class="kpi-content">
+                    <div class="kpi-label">Active Jewellers</div>
+                    <div class="kpi-value" id="kpi-active-jewellers">0</div>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-icon">📇</div>
+                <div class="kpi-content">
+                    <div class="kpi-label">Total Contacts</div>
+                    <div class="kpi-value" id="kpi-total-contacts">0</div>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-icon">📨</div>
+                <div class="kpi-content">
+                    <div class="kpi-label">Messages (30d)</div>
+                    <div class="kpi-value" id="kpi-messages-30d">0</div>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-icon">📊</div>
+                <div class="kpi-content">
+                    <div class="kpi-label">Delivery Rate</div>
+                    <div class="kpi-value" id="kpi-delivery-rate">0%</div>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-icon">👁️</div>
+                <div class="kpi-content">
+                    <div class="kpi-label">Read Rate</div>
+                    <div class="kpi-value" id="kpi-read-rate">0%</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Jeweller Stats Table -->
+        <section class="admin-section">
+            <div class="section-header">
+                <h2>Jeweller Performance</h2>
+                <div class="section-actions">
+                    <a href="/admin/jewellers.html" class="btn btn-secondary">View All Jewellers</a>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Business Name</th>
+                            <th>Contacts</th>
+                            <th>Campaigns</th>
+                            <th>Messages (30d)</th>
+                            <th>Delivery %</th>
+                            <th>Read %</th>
+                            <th>Last Active</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="jewellers-table-body">
+                        <tr>
+                            <td colspan="8" class="text-center">Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        </div>
+        <!-- End Dashboard Content -->
+    </main>
+
+    <!-- Confirmation Modal Template (hidden) -->
+    <div id="modal-container"></div>
+
+    <script type="module" src="/src/admin/dashboard.ts"></script>
+</body>
+</html>

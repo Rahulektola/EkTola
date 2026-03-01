@@ -1,4 +1,4 @@
-# EkTola - WhatsApp Jeweller Platform Backend
+# OUTDATED DO NOT REFER THIS FILE
 
 **Status:** ✅ **Backend Complete - Message Sending Service Operational**
 

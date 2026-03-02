@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#dc2626">
+    <title>System Analytics - ekTola Admin</title>
+    <link rel="stylesheet" href="../css/style.css">
+    
+    <!-- Auth Service loaded via module -->
+</head>
+<body class="admin-layout">
+    <!-- Navigation Sidebar -->
+    <div id="admin-nav-container"></div>
+
+    <!-- Main Content -->
+    <main class="admin-main">
+        <header class="admin-header">
+            <h1>System Analytics</h1>
+            <div class="header-controls">
+                <label for="days-select">Time Period:</label>
+                <select id="days-select" class="form-select">
+                    <option value="7">Last 7 Days</option>
+                    <option value="30" selected>Last 30 Days</option>
+                    <option value="90">Last 90 Days</option>
+                    <option value="365">Last Year</option>
+                </select>
+            </div>
+        </header>
+
+        <!-- Loading State -->
+        <div id="loading-state" class="loading-container" style="display: none;">
+            <div class="loading-spinner"></div>
+            <p>Loading analytics...</p>
+        </div>
+
+        <!-- Analytics Content -->
+        <div id="analytics-content" style="display: none;">
+            <!-- Summary Card -->
+            <section class="admin-card">
+                <h2>Overview</h2>
+                <div class="analytics-summary">
+                    <div class="summary-item">
+                        <div class="summary-label">Total Messages</div>
+                        <div class="summary-value" id="total-messages">0</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Language Distribution -->
+            <section class="admin-card">
+                <h2>Language Distribution</h2>
+                <div id="language-chart" class="chart-container"></div>
+            </section>
+
+            <!-- Campaign Type Distribution -->
+            <section class="admin-card">
+                <h2>Campaign Type Distribution</h2>
+                <div id="campaign-type-chart" class="chart-container"></div>
+            </section>
+
+            <!-- Failure Breakdown -->
+            <section class="admin-card">
+                <h2>Failure Analysis</h2>
+                <div id="failure-chart" class="chart-container"></div>
+            </section>
+
+            <!-- Daily Volume -->
+            <section class="admin-card">
+                <h2>Daily Message Volume</h2>
+                <div id="daily-volume-chart" class="chart-container"></div>
+            </section>
+        </div>
+    </main>
+
+    <script type="module" src="/src/admin/analytics.ts"></script>
+</body>
+</html>

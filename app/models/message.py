@@ -2,7 +2,7 @@ from sqlalchemy import Column, String, DateTime, Integer, ForeignKey, Text, Enum
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.database import Base
-from app.utils.enums import MessageStatus, Language
+from app.utils.enums import MessageStatus, MessageType, Language
 
 
 class Message(Base):
@@ -13,6 +13,14 @@ class Message(Base):
     jeweller_id = Column(Integer, ForeignKey("jewellers.id"), nullable=False, index=True)
     contact_id = Column(Integer, ForeignKey("contacts.id"), nullable=False, index=True)
     campaign_run_id = Column(Integer, ForeignKey("campaign_runs.id"), nullable=True, index=True)
+    
+    # Message type: distinguishes campaign messages from SIP/Loan reminders
+    message_type = Column(
+        SQLEnum(MessageType),
+        default=MessageType.CAMPAIGN,
+        nullable=False,
+        index=True,
+    )
     
     # Message content
     phone_number = Column(String, nullable=False)  # Denormalized for quick access
@@ -25,6 +33,9 @@ class Message(Base):
     
     # Status tracking
     status = Column(SQLEnum(MessageStatus), default=MessageStatus.QUEUED, nullable=False, index=True)
+    
+    # Scheduling – when the message should be sent (NULL = send immediately)
+    scheduled_at = Column(DateTime, nullable=True, index=True)
     
     # Timestamps for message lifecycle
     queued_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -49,4 +60,6 @@ class Message(Base):
         Index('idx_jeweller_status', 'jeweller_id', 'status'),
         Index('idx_campaign_status', 'campaign_run_id', 'status'),
         Index('idx_status_queued', 'status', 'queued_at'),
+        Index('idx_status_scheduled', 'status', 'scheduled_at'),
+        Index('idx_type_status', 'message_type', 'status'),
     )

@@ -14,6 +14,7 @@ celery_app = Celery(
     include=[
         'app.tasks.campaign_tasks',  # Import campaign tasks
         'app.tasks.token_refresh',   # Import token refresh tasks
+        'app.tasks.reminder_tasks',  # Import SIP/Loan reminder tasks
     ]
 )
 
@@ -29,6 +30,7 @@ celery_app.conf.update(
     # Task routing
     task_routes={
         'app.tasks.campaign_tasks.*': {'queue': 'campaigns'},
+        'app.tasks.reminder_tasks.*': {'queue': 'campaigns'},
     },
     
     # Task execution settings
@@ -56,6 +58,10 @@ celery_app.conf.update(
         'check-pending-campaigns': {
             'task': 'app.tasks.campaign_tasks.check_pending_campaigns',
             'schedule': crontab(minute='*/1'),  # Every minute
+        },
+        'send-payment-reminders': {
+            'task': 'app.tasks.reminder_tasks.send_payment_reminders',
+            'schedule': crontab(hour=9, minute=0),  # Daily at 9:00 AM IST
         },
         'refresh-expiring-whatsapp-tokens': {
             'task': 'refresh_expiring_whatsapp_tokens',

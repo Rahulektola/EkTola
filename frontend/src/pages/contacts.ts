@@ -15,6 +15,12 @@ interface Contact {
   segment: string;
   preferred_language: string;
   opted_out: boolean;
+  sip_payment_day: number | null;
+  loan_payment_day: number | null;
+  sip_reminder_days_before: number;
+  loan_reminder_days_before: number;
+  last_sip_reminder_sent_at: string | null;
+  last_loan_reminder_sent_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -311,6 +317,10 @@ function renderContacts(data: ContactListResponse): void {
                 data-contact-name="${escapeHtml(contact.name || '')}"
                 data-contact-phone="${escapeHtml(contact.phone_number)}"
                 data-contact-segment="${contact.segment}"
+                data-sip-payment-day="${contact.sip_payment_day ?? ''}"
+                data-loan-payment-day="${contact.loan_payment_day ?? ''}"
+                data-sip-reminder-days="${contact.sip_reminder_days_before ?? 3}"
+                data-loan-reminder-days="${contact.loan_reminder_days_before ?? 3}"
                 title="Edit contact">✏️</button>
             </td>
           </tr>
@@ -580,17 +590,88 @@ function attachEditListeners(): void {
       const name = el.dataset.contactName || '';
       const phone = el.dataset.contactPhone || '';
       const segment = el.dataset.contactSegment || 'MARKETING';
-      openEditModal(id, name, phone, segment);
+      const sipPaymentDay = el.dataset.sipPaymentDay || '';
+      const loanPaymentDay = el.dataset.loanPaymentDay || '';
+      const sipReminderDays = el.dataset.sipReminderDays || '3';
+      const loanReminderDays = el.dataset.loanReminderDays || '3';
+      openEditModal(id, name, phone, segment, sipPaymentDay, loanPaymentDay, sipReminderDays, loanReminderDays);
     });
   });
 }
 
-function openEditModal(id: number, name: string, phone: string, segment: string): void {
+function updateScheduleVisibility(segment: string): void {
+  const sipGroup = document.getElementById('sipScheduleGroup');
+  const loanGroup = document.getElementById('loanScheduleGroup');
+  const noScheduleNote = document.getElementById('noScheduleNote');
+
+  const showSip = segment === 'GOLD_SIP' || segment === 'BOTH';
+  const showLoan = segment === 'GOLD_LOAN' || segment === 'BOTH';
+  const isMarketing = segment === 'MARKETING';
+
+  if (sipGroup) {
+    sipGroup.classList.toggle('hidden', !showSip);
+    if (!showSip) {
+      (document.getElementById('editSipPaymentDay') as HTMLInputElement).value = '';
+      (document.getElementById('editSipReminderDays') as HTMLSelectElement).value = '3';
+    }
+  }
+  if (loanGroup) {
+    loanGroup.classList.toggle('hidden', !showLoan);
+    if (!showLoan) {
+      (document.getElementById('editLoanPaymentDay') as HTMLInputElement).value = '';
+      (document.getElementById('editLoanReminderDays') as HTMLSelectElement).value = '3';
+    }
+  }
+  if (noScheduleNote) {
+    noScheduleNote.classList.toggle('hidden', !isMarketing);
+  }
+}
+
+function attachScheduleClearListeners(): void {
+  const clearSipBtn = document.getElementById('clearSipDay');
+  const clearLoanBtn = document.getElementById('clearLoanDay');
+
+  if (clearSipBtn) {
+    clearSipBtn.onclick = () => {
+      (document.getElementById('editSipPaymentDay') as HTMLInputElement).value = '';
+    };
+  }
+
+  if (clearLoanBtn) {
+    clearLoanBtn.onclick = () => {
+      (document.getElementById('editLoanPaymentDay') as HTMLInputElement).value = '';
+    };
+  }
+}
+
+function openEditModal(
+  id: number, name: string, phone: string, segment: string,
+  sipPaymentDay: string, loanPaymentDay: string,
+  sipReminderDays: string, loanReminderDays: string
+): void {
   editingContactId = id;
   (document.getElementById('editContactId') as HTMLInputElement).value = id.toString();
   (document.getElementById('editContactPhone') as HTMLInputElement).value = phone;
   (document.getElementById('editContactName') as HTMLInputElement).value = name;
-  (document.getElementById('editContactSegment') as HTMLSelectElement).value = segment;
+
+  const segmentSelect = document.getElementById('editContactSegment') as HTMLSelectElement;
+  segmentSelect.value = segment;
+
+  // Populate payment schedule fields
+  (document.getElementById('editSipPaymentDay') as HTMLInputElement).value = sipPaymentDay;
+  (document.getElementById('editLoanPaymentDay') as HTMLInputElement).value = loanPaymentDay;
+  (document.getElementById('editSipReminderDays') as HTMLSelectElement).value = sipReminderDays;
+  (document.getElementById('editLoanReminderDays') as HTMLSelectElement).value = loanReminderDays;
+
+  // Show/hide schedule fields based on segment
+  updateScheduleVisibility(segment);
+
+  // Attach clear button listeners
+  attachScheduleClearListeners();
+
+  // Update visibility live when segment changes
+  segmentSelect.onchange = () => updateScheduleVisibility(segmentSelect.value);
+
   document.getElementById('editContactModal')?.classList.add('active');
 }
 
@@ -610,8 +691,42 @@ async function submitEditContact(): Promise<void> {
   submitBtn.textContent = 'Saving...';
 
   try {
-    const body: Record<string, string> = { segment };
+    const body: Record<string, string | number | null> = { segment };
     if (name) body.name = name;
+
+    // Include payment schedule fields based on segment
+    const canSip = segment === 'GOLD_SIP' || segment === 'BOTH';
+    const canLoan = segment === 'GOLD_LOAN' || segment === 'BOTH';
+
+    if (canSip) {
+      const sipDayVal = (document.getElementById('editSipPaymentDay') as HTMLInputElement).value.trim();
+      const sipDay = sipDayVal ? parseInt(sipDayVal, 10) : null;
+      // Validate range
+      if (sipDay !== null && (sipDay < 1 || sipDay > 31)) {
+        throw new Error('SIP payment day must be between 1 and 31');
+      }
+      body.sip_payment_day = sipDay;
+      body.sip_reminder_days_before = parseInt(
+        (document.getElementById('editSipReminderDays') as HTMLSelectElement).value, 10
+      );
+    } else {
+      body.sip_payment_day = null;
+    }
+
+    if (canLoan) {
+      const loanDayVal = (document.getElementById('editLoanPaymentDay') as HTMLInputElement).value.trim();
+      const loanDay = loanDayVal ? parseInt(loanDayVal, 10) : null;
+      // Validate range
+      if (loanDay !== null && (loanDay < 1 || loanDay > 31)) {
+        throw new Error('Loan payment day must be between 1 and 31');
+      }
+      body.loan_payment_day = loanDay;
+      body.loan_reminder_days_before = parseInt(
+        (document.getElementById('editLoanReminderDays') as HTMLSelectElement).value, 10
+      );
+    } else {
+      body.loan_payment_day = null;
+    }
 
     const response = await fetch(`${API_BASE}/contacts/${editingContactId}`, {
       method: 'PATCH',

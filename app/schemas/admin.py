@@ -278,3 +278,71 @@ class WhatsAppStatusResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+# ============ Contact Purge & Restore Schemas ============
+
+class DeletedContactResponse(BaseModel):
+    """Deleted contact details for restore view"""
+    id: int
+    jeweller_id: int
+    phone_number: str
+    name: Optional[str] = None
+    customer_id: Optional[str] = None
+    segment: SegmentType
+    preferred_language: Language
+    deleted_at: Optional[datetime] = None
+    days_since_deletion: int = 0
+    
+    class Config:
+        from_attributes = True
+
+
+class DeletedContactsListResponse(BaseModel):
+    """Paginated list of soft-deleted contacts"""
+    contacts: List[DeletedContactResponse]
+    total: int
+    page: int
+    page_size: int
+    jeweller_id: Optional[int] = None  # None = all jewellers
+    jeweller_name: Optional[str] = None
+
+
+class ContactPurgeRequest(BaseModel):
+    """Request to purge old deleted contacts"""
+    older_than_days: int = Field(
+        30,
+        ge=1,
+        le=365,
+        description="Permanently delete contacts that were soft-deleted more than X days ago"
+    )
+    jeweller_id: Optional[int] = Field(
+        None,
+        description="Purge only for specific jeweller (None = all jewellers)"
+    )
+
+
+class ContactPurgeResponse(BaseModel):
+    """Response after purging contacts"""
+    purged_count: int
+    message: str
+    jeweller_id: Optional[int] = None
+    older_than_days: int
+
+
+class ContactRestoreRequest(BaseModel):
+    """Request to restore deleted contacts"""
+    contact_ids: List[int] = Field(
+        ...,
+        min_length=1,
+        description="List of contact IDs to restore"
+    )
+
+
+class ContactRestoreResponse(BaseModel):
+    """Response after restoring contacts"""
+    restored_count: int
+    failed_count: int
+    message: str
+    restored_ids: List[int]
+    failed_ids: List[int]

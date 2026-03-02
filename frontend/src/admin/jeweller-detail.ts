@@ -170,6 +170,10 @@ function setupEventListeners(): void {
         });
     });
 
+    // Edit Profile
+    document.getElementById('btn-edit-profile')?.addEventListener('click', openEditProfileModal);
+    document.getElementById('btn-save-profile')?.addEventListener('click', saveProfileChanges);
+
     // Approval actions
     document.getElementById('btn-approve')?.addEventListener('click', approveJeweller);
     document.getElementById('btn-reject')?.addEventListener('click', showRejectForm);
@@ -271,6 +275,89 @@ function displayJewellerDetails(jeweller: JewellerDetail): void {
     // Admin Notes
     const notesTextarea = document.getElementById('admin-notes') as HTMLTextAreaElement;
     notesTextarea.value = jeweller.admin_notes || '';
+}
+
+/**
+ * Open edit profile modal
+ */
+function openEditProfileModal(): void {
+    if (!jewellerData) return;
+
+    // Populate form with current values
+    (document.getElementById('edit-business-name') as HTMLInputElement).value = jewellerData.business_name;
+    (document.getElementById('edit-owner-name') as HTMLInputElement).value = jewellerData.owner_name || '';
+    (document.getElementById('edit-phone') as HTMLInputElement).value = jewellerData.phone_number;
+    (document.getElementById('edit-address') as HTMLInputElement).value = jewellerData.address || '';
+    (document.getElementById('edit-location') as HTMLInputElement).value = jewellerData.location || '';
+    (document.getElementById('edit-timezone') as HTMLSelectElement).value = jewellerData.timezone;
+    (document.getElementById('edit-is-active') as HTMLInputElement).checked = jewellerData.is_active;
+
+    // Clear any previous errors
+    const errorEl = document.getElementById('edit-error')!;
+    errorEl.textContent = '';
+
+    // Show modal
+    document.getElementById('edit-profile-modal')!.style.display = 'flex';
+}
+
+/**
+ * Save profile changes
+ */
+async function saveProfileChanges(): Promise<void> {
+    const errorEl = document.getElementById('edit-error')!;
+    const saveBtn = document.getElementById('btn-save-profile')!;
+    
+    clearError(errorEl);
+    setButtonLoading(saveBtn, true);
+
+    const businessName = (document.getElementById('edit-business-name') as HTMLInputElement).value.trim();
+    const ownerName = (document.getElementById('edit-owner-name') as HTMLInputElement).value.trim() || null;
+    const phone = (document.getElementById('edit-phone') as HTMLInputElement).value.trim();
+    const address = (document.getElementById('edit-address') as HTMLInputElement).value.trim() || null;
+    const location = (document.getElementById('edit-location') as HTMLInputElement).value.trim() || null;
+    const timezone = (document.getElementById('edit-timezone') as HTMLSelectElement).value;
+    const isActive = (document.getElementById('edit-is-active') as HTMLInputElement).checked;
+
+    if (!businessName) {
+        showError(errorEl, 'Business name is required');
+        setButtonLoading(saveBtn, false);
+        return;
+    }
+
+    if (!phone) {
+        showError(errorEl, 'Phone number is required');
+        setButtonLoading(saveBtn, false);
+        return;
+    }
+
+    try {
+        const updatedData = await apiRequest<JewellerDetail>(
+            `/admin/jewellers/${jewellerId}`,
+            authService,
+            {
+                method: 'PATCH',
+                body: JSON.stringify({
+                    business_name: businessName,
+                    owner_name: ownerName,
+                    phone_number: phone,
+                    address: address,
+                    location: location,
+                    timezone: timezone,
+                    is_active: isActive
+                })
+            }
+        );
+
+        jewellerData = updatedData;
+        displayJewellerDetails(updatedData);
+        
+        setButtonLoading(saveBtn, false);
+        document.getElementById('edit-profile-modal')!.style.display = 'none';
+        showToast('Profile updated successfully', 'success');
+    } catch (error) {
+        setButtonLoading(saveBtn, false);
+        showError(errorEl, error instanceof Error ? error.message : 'Failed to update profile');
+    }
 }
 
 /**

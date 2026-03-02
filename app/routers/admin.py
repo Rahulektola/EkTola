@@ -27,6 +27,9 @@ from app.schemas.admin import (
     AdminMessageResponse, AdminMessagesPageResponse,
     ImpersonateResponse, JewellerAnalyticsResponse,
     WhatsAppStatusResponse,
+    DeletedContactResponse, DeletedContactsListResponse,
+    ContactPurgeRequest, ContactPurgeResponse,
+    ContactRestoreRequest, ContactRestoreResponse,
 )
 
 import pandas as pd
@@ -1028,4 +1031,158 @@ def get_jeweller_whatsapp_status(
         token_expires_in_days=token_expires_in_days,
         last_token_refresh=jeweller.last_token_refresh,
         fb_app_scoped_user_id=jeweller.fb_app_scoped_user_id,
+    )
+
+
+# ==================== 12. DELETED CONTACTS MANAGEMENT ====================
+
+@router.get("/contacts/deleted", response_model=DeletedContactsListResponse)
+def list_deleted_contacts(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    jeweller_id: Optional[int] = Query(None, description="Filter by jeweller ID"),
+    older_than_days: Optional[int] = Query(None, ge=1, description="Only show contacts deleted more than X days ago"),
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """
+    List all soft-deleted contacts across all jewellers or for a specific jeweller.
+    
+    Use this to review deleted contacts before restoration or permanent purge.
+    
+    **Admin only**
+    """
+    query = db.query(Contact).filter(Contact.is_deleted == True)
+    
+    jeweller_name = None
+    if jeweller_id:
+        jeweller = _get_jeweller_or_404(db, jeweller_id)
+        jeweller_name = jeweller.business_name
+        query = query.filter(Contact.jeweller_id == jeweller_id)
+    
+    if older_than_days:
+        cutoff = datetime.utcnow() - timedelta(days=older_than_days)
+        query = query.filter(Contact.deleted_at <= cutoff)
+    
+    total = query.count()
+    contacts = query.order_by(Contact.deleted_at.desc()).offset(
+        (page - 1) * page_size
+    ).limit(page_size).all()
+    
+    now = datetime.utcnow()
+    contact_responses = []
+    for c in contacts:
+        days_since = (now - c.deleted_at).days if c.deleted_at else 0
+        contact_responses.append(DeletedContactResponse(
+            id=c.id,
+            jeweller_id=c.jeweller_id,
+            phone_number=c.phone_number,
+            name=c.name,
+            customer_id=c.customer_id,
+            segment=c.segment,
+            preferred_language=c.preferred_language,
+            deleted_at=c.deleted_at,
+            days_since_deletion=days_since,
+        ))
+    
+    return DeletedContactsListResponse(
+        contacts=contact_responses,
+        total=total,
+        page=page,
+        page_size=page_size,
+        jeweller_id=jeweller_id,
+        jeweller_name=jeweller_name,
+    )
+
+
+@router.post("/contacts/purge", response_model=ContactPurgeResponse)
+def purge_deleted_contacts(
+    request: ContactPurgeRequest,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """
+    Permanently delete (hard delete) contacts that have been soft-deleted for more than X days.
+    
+    **WARNING**: This action is irreversible. All associated message history will also be deleted.
+    
+    - `older_than_days`: Only purge contacts deleted more than this many days ago (default: 30)
+    - `jeweller_id`: Optionally limit purge to a specific jeweller
+    
+    **Admin only**
+    """
+    cutoff = datetime.utcnow() - timedelta(days=request.older_than_days)
+    
+    query = db.query(Contact).filter(
+        Contact.is_deleted == True,
+        Contact.deleted_at <= cutoff
+    )
+    
+    if request.jeweller_id:
+        # Verify jeweller exists
+        _get_jeweller_or_404(db, request.jeweller_id)
+        query = query.filter(Contact.jeweller_id == request.jeweller_id)
+    
+    # Get count before deletion
+    purge_count = query.count()
+    
+    if purge_count == 0:
+        return ContactPurgeResponse(
+            purged_count=0,
+            message="No contacts found matching purge criteria",
+            jeweller_id=request.jeweller_id,
+            older_than_days=request.older_than_days,
+        )
+    
+    # Permanently delete (cascade will delete messages)
+    query.delete(synchronize_session=False)
+    db.commit()
+    
+    jeweller_msg = f" for jeweller {request.jeweller_id}" if request.jeweller_id else ""
+    return ContactPurgeResponse(
+        purged_count=purge_count,
+        message=f"Permanently deleted {purge_count} contacts{jeweller_msg} (deleted more than {request.older_than_days} days ago)",
+        jeweller_id=request.jeweller_id,
+        older_than_days=request.older_than_days,
+    )
+
+
+@router.post("/contacts/restore", response_model=ContactRestoreResponse)
+def restore_deleted_contacts(
+    request: ContactRestoreRequest,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """
+    Restore soft-deleted contacts by their IDs.
+    
+    Contacts will be restored to active status and visible in dashboards again.
+    
+    **Admin only**
+    """
+    restored_ids = []
+    failed_ids = []
+    
+    for contact_id in request.contact_ids:
+        contact = db.query(Contact).filter(
+            Contact.id == contact_id,
+            Contact.is_deleted == True
+        ).first()
+        
+        if contact:
+            contact.is_deleted = False
+            contact.deleted_at = None
+            contact.updated_at = datetime.utcnow()
+            restored_ids.append(contact_id)
+        else:
+            failed_ids.append(contact_id)
+    
+    db.commit()
+    
+    return ContactRestoreResponse(
+        restored_count=len(restored_ids),
+        failed_count=len(failed_ids),
+        message=f"Restored {len(restored_ids)} contacts" + (f", {len(failed_ids)} not found or already active" if failed_ids else ""),
+        restored_ids=restored_ids,
+        failed_ids=failed_ids,
     )

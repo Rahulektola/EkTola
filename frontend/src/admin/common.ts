@@ -386,6 +386,10 @@ export class AdminNavigation {
                         <span class="nav-icon">👥</span>
                         Jewellers
                     </a>
+                    <a href="/admin/deleted-contacts.html" class="admin-nav-item ${this.activePage === 'deleted-contacts' ? 'active' : ''}">
+                        <span class="nav-icon">🗑️</span>
+                        Deleted Contacts
+                    </a>
                     <a href="/admin/analytics.html" class="admin-nav-item ${this.activePage === 'analytics' ? 'active' : ''}">
                         <span class="nav-icon">📈</span>
                         Analytics

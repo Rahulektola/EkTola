@@ -220,3 +220,23 @@ class ContactBulkDeleteResponse(BaseModel):
     """Bulk delete contacts response"""
     deleted_count: int
     message: str = "Contacts deleted successfully"
+
+
+class BulkContactUpdateRequest(BaseModel):
+    """Bulk update contacts — segment and/or payment schedule for multiple contacts at once"""
+    contact_ids: List[int] = Field(..., min_items=1, max_items=500, description="List of contact IDs to update")
+    segment: Optional[SegmentType] = Field(None, description="New segment for all selected contacts. Omit to keep current.")
+    sip_payment_day: Optional[int] = Field(None, ge=1, le=31, description="SIP payment day. Omit to keep current.")
+    loan_payment_day: Optional[int] = Field(None, ge=1, le=31, description="Loan payment day. Omit to keep current.")
+    sip_reminder_days_before: Optional[int] = Field(None, ge=1, le=15, description="SIP reminder days. Omit to keep current.")
+    loan_reminder_days_before: Optional[int] = Field(None, ge=1, le=15, description="Loan reminder days. Omit to keep current.")
+    clear_sip_schedule: bool = Field(False, description="Set to true to clear SIP payment day for all selected contacts")
+    clear_loan_schedule: bool = Field(False, description="Set to true to clear Loan payment day for all selected contacts")
+
+
+class BulkContactUpdateResponse(BaseModel):
+    """Response from bulk contact update"""
+    updated: int
+    failed: int
+    failure_details: List[dict] = Field(default_factory=list)
+    message: str

@@ -11,6 +11,7 @@ from app.schemas.contact import (
     ContactListResponse, ContactImportReport, ContactSegmentStats,
     DashboardContactCreate, DashboardContactResponse, DashboardBulkUploadReport,
     ContactBulkDelete, ContactBulkDeleteResponse,
+    BulkContactUpdateRequest, BulkContactUpdateResponse,
     PaymentScheduleUpdate, PaymentScheduleClear,
     BulkPaymentScheduleRequest, BulkPaymentScheduleResponse,
     PaymentScheduleResponse, PaymentScheduleListResponse,
@@ -432,6 +433,7 @@ def list_contacts(
     segment: Optional[SegmentType] = None,
     opted_out: Optional[bool] = None,
     search: Optional[str] = None,
+    payment_day: Optional[int] = Query(None, ge=1, le=31, description="Filter by SIP or Loan payment day"),
     current_jeweller: Jeweller = Depends(get_current_jeweller),
     db: Session = Depends(get_db)
 ):
@@ -450,6 +452,11 @@ def list_contacts(
         query = query.filter(
             (Contact.name.ilike(f"%{search}%")) |
             (Contact.phone_number.ilike(f"%{search}%"))
+        )
+    if payment_day is not None:
+        query = query.filter(
+            (Contact.sip_payment_day == payment_day) |
+            (Contact.loan_payment_day == payment_day)
         )
     
     # Get total count
@@ -526,6 +533,109 @@ def bulk_delete_contacts(
     return ContactBulkDeleteResponse(
         deleted_count=len(contacts),
         message=f"Successfully deleted {len(contacts)} contact(s)"
+    )
+
+
+@router.post("/bulk-update", response_model=BulkContactUpdateResponse)
+def bulk_update_contacts(
+    request: BulkContactUpdateRequest,
+    current_jeweller: Jeweller = Depends(get_current_jeweller),
+    db: Session = Depends(get_db)
+):
+    """
+    Bulk update contacts — change segment and/or payment schedule for multiple contacts at once.
+    Only fields that are explicitly provided are changed; omitted fields are left as-is.
+    Use clear_sip_schedule / clear_loan_schedule to explicitly remove payment schedules.
+    """
+    contacts = db.query(Contact).filter(
+        Contact.id.in_(request.contact_ids),
+        Contact.jeweller_id == current_jeweller.id,
+        Contact.is_deleted == False
+    ).all()
+
+    if not contacts:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No matching contacts found to update"
+        )
+
+    updated = 0
+    failed = 0
+    failure_details = []
+
+    for contact in contacts:
+        try:
+            # 1. Apply segment change first (if provided)
+            effective_segment = contact.segment
+            if request.segment is not None:
+                contact.segment = request.segment
+                effective_segment = request.segment
+
+                # Clear incompatible schedules when segment changes
+                can_sip = effective_segment in (SegmentType.GOLD_SIP, SegmentType.BOTH)
+                can_loan = effective_segment in (SegmentType.GOLD_LOAN, SegmentType.BOTH)
+                if not can_sip:
+                    contact.sip_payment_day = None
+                    contact.last_sip_reminder_sent_at = None
+                if not can_loan:
+                    contact.loan_payment_day = None
+                    contact.last_loan_reminder_sent_at = None
+
+            # 2. Clear schedules if explicitly requested
+            if request.clear_sip_schedule:
+                contact.sip_payment_day = None
+                contact.last_sip_reminder_sent_at = None
+            if request.clear_loan_schedule:
+                contact.loan_payment_day = None
+                contact.last_loan_reminder_sent_at = None
+
+            # 3. Apply payment schedule updates (only if not clearing)
+            can_sip = effective_segment in (SegmentType.GOLD_SIP, SegmentType.BOTH)
+            can_loan = effective_segment in (SegmentType.GOLD_LOAN, SegmentType.BOTH)
+
+            if request.sip_payment_day is not None and not request.clear_sip_schedule:
+                if not can_sip:
+                    raise ValueError("SIP schedule requires GOLD_SIP or BOTH segment")
+                contact.sip_payment_day = request.sip_payment_day
+
+            if request.sip_reminder_days_before is not None and not request.clear_sip_schedule:
+                if can_sip:
+                    contact.sip_reminder_days_before = request.sip_reminder_days_before
+
+            if request.loan_payment_day is not None and not request.clear_loan_schedule:
+                if not can_loan:
+                    raise ValueError("Loan schedule requires GOLD_LOAN or BOTH segment")
+                contact.loan_payment_day = request.loan_payment_day
+
+            if request.loan_reminder_days_before is not None and not request.clear_loan_schedule:
+                if can_loan:
+                    contact.loan_reminder_days_before = request.loan_reminder_days_before
+
+            contact.updated_at = datetime.utcnow()
+            updated += 1
+
+        except Exception as e:
+            failed += 1
+            failure_details.append({
+                "contact_id": contact.id,
+                "reason": str(e)
+            })
+
+    if updated > 0:
+        try:
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Database error: {str(e)}"
+            )
+
+    return BulkContactUpdateResponse(
+        updated=updated,
+        failed=failed,
+        failure_details=failure_details,
+        message=f"Updated {updated} contact(s), {failed} failed"
     )
 
 

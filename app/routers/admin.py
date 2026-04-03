@@ -3,9 +3,9 @@ Admin Dashboard Router
 Full admin CRUD for jeweller management, contact/campaign management, impersonation
 """
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, Integer, or_
-from typing import Optional
+from typing import Optional, Dict, List
 from datetime import datetime, timedelta
 
 from app.database import get_db
@@ -40,6 +40,46 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 
 # ==================== HELPERS ====================
 
+def _batch_jeweller_aggregates(db: Session, jeweller_ids: List[int]) -> Dict[int, Dict]:
+    """Batch-fetch aggregates for multiple jewellers in 3 queries instead of 4*N."""
+    if not jeweller_ids:
+        return {}
+    
+    result = {jid: {'total_contacts': 0, 'total_campaigns': 0, 'total_messages': 0, 'email': None} for jid in jeweller_ids}
+    
+    # 1. Contact counts per jeweller  
+    contact_counts = db.query(
+        Contact.jeweller_id,
+        func.count(Contact.id).label('cnt')
+    ).filter(
+        Contact.jeweller_id.in_(jeweller_ids),
+        Contact.is_deleted == False
+    ).group_by(Contact.jeweller_id).all()
+    for row in contact_counts:
+        result[row.jeweller_id]['total_contacts'] = row.cnt
+    
+    # 2. Campaign counts per jeweller
+    campaign_counts = db.query(
+        Campaign.jeweller_id,
+        func.count(Campaign.id).label('cnt')
+    ).filter(
+        Campaign.jeweller_id.in_(jeweller_ids)
+    ).group_by(Campaign.jeweller_id).all()
+    for row in campaign_counts:
+        result[row.jeweller_id]['total_campaigns'] = row.cnt
+    
+    # 3. Message counts per jeweller
+    message_counts = db.query(
+        Message.jeweller_id,
+        func.count(Message.id).label('cnt')
+    ).filter(
+        Message.jeweller_id.in_(jeweller_ids)
+    ).group_by(Message.jeweller_id).all()
+    for row in message_counts:
+        result[row.jeweller_id]['total_messages'] = row.cnt
+    
+    return result
+
 def _get_jeweller_or_404(db: Session, jeweller_id: int) -> Jeweller:
     """Fetch jeweller by ID or raise 404"""
     jeweller = db.query(Jeweller).filter(Jeweller.id == jeweller_id).first()
@@ -51,24 +91,34 @@ def _get_jeweller_or_404(db: Session, jeweller_id: int) -> Jeweller:
     return jeweller
 
 
-def _build_jeweller_detail(db: Session, jeweller: Jeweller) -> JewellerDetailResponse:
-    """Build full detail response with aggregates"""
-    total_contacts = db.query(func.count(Contact.id)).filter(
-        Contact.jeweller_id == jeweller.id,
-        Contact.is_deleted == False
-    ).scalar() or 0
+def _build_jeweller_detail(db: Session, jeweller: Jeweller, aggregates: Dict = None) -> JewellerDetailResponse:
+    """Build full detail response with aggregates.
+    
+    If `aggregates` dict is provided (from batch query), uses those values
+    instead of making individual queries. Keys: total_contacts, total_campaigns, total_messages, email.
+    """
+    if aggregates:
+        total_contacts = aggregates.get('total_contacts', 0)
+        total_campaigns = aggregates.get('total_campaigns', 0)
+        total_messages = aggregates.get('total_messages', 0)
+        email = aggregates.get('email')
+    else:
+        total_contacts = db.query(func.count(Contact.id)).filter(
+            Contact.jeweller_id == jeweller.id,
+            Contact.is_deleted == False
+        ).scalar() or 0
 
-    total_campaigns = db.query(func.count(Campaign.id)).filter(
-        Campaign.jeweller_id == jeweller.id
-    ).scalar() or 0
+        total_campaigns = db.query(func.count(Campaign.id)).filter(
+            Campaign.jeweller_id == jeweller.id
+        ).scalar() or 0
 
-    total_messages = db.query(func.count(Message.id)).filter(
-        Message.jeweller_id == jeweller.id
-    ).scalar() or 0
+        total_messages = db.query(func.count(Message.id)).filter(
+            Message.jeweller_id == jeweller.id
+        ).scalar() or 0
 
-    # Get user email
-    user = db.query(User).filter(User.id == jeweller.user_id).first()
-    email = user.email if user else None
+        # Get user email
+        user = db.query(User).filter(User.id == jeweller.user_id).first()
+        email = user.email if user else None
     
     # Map is_approved boolean to ApprovalStatus enum
     approval_status = ApprovalStatus.APPROVED if jeweller.is_approved else ApprovalStatus.PENDING
@@ -158,8 +208,21 @@ def list_jewellers(
     total = query.count()
     jewellers = query.offset((page - 1) * page_size).limit(page_size).all()
 
+    # Batch-fetch aggregates for all jewellers on this page (3 queries instead of 4*N)
+    jeweller_ids = [j.id for j in jewellers]
+    aggregates = _batch_jeweller_aggregates(db, jeweller_ids)
+    
+    # Batch-fetch user emails via JOIN
+    user_ids = [j.user_id for j in jewellers]
+    if user_ids:
+        user_emails = db.query(User.id, User.email).filter(User.id.in_(user_ids)).all()
+        email_map = {u.id: u.email for u in user_emails}
+        for j in jewellers:
+            if j.id in aggregates:
+                aggregates[j.id]['email'] = email_map.get(j.user_id)
+
     return JewellerListResponse(
-        jewellers=[_build_jeweller_detail(db, j) for j in jewellers],
+        jewellers=[_build_jeweller_detail(db, j, aggregates.get(j.id)) for j in jewellers],
         total=total,
         page=page,
         page_size=page_size,
@@ -179,8 +242,19 @@ def get_pending_jewellers(
         Jeweller.is_approved == False
     ).order_by(Jeweller.created_at.desc()).all()
 
+    # Batch-fetch aggregates
+    jeweller_ids = [j.id for j in pending]
+    aggregates = _batch_jeweller_aggregates(db, jeweller_ids)
+    user_ids = [j.user_id for j in pending]
+    if user_ids:
+        user_emails = db.query(User.id, User.email).filter(User.id.in_(user_ids)).all()
+        email_map = {u.id: u.email for u in user_emails}
+        for j in pending:
+            if j.id in aggregates:
+                aggregates[j.id]['email'] = email_map.get(j.user_id)
+
     return JewellerListResponse(
-        jewellers=[_build_jeweller_detail(db, j) for j in pending],
+        jewellers=[_build_jeweller_detail(db, j, aggregates.get(j.id)) for j in pending],
         total=len(pending),
         page=1,
         page_size=len(pending),

@@ -6,7 +6,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import List
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from celery import Task
 
 from app.celery_app import celery_app
@@ -49,8 +49,10 @@ def execute_campaign_run(self, campaign_run_id: int):
     db = self.db
     
     try:
-        # Get campaign run
-        campaign_run = db.query(CampaignRun).filter(
+        # Get campaign run with campaign eagerly loaded (1 query instead of 2)
+        campaign_run = db.query(CampaignRun).options(
+            joinedload(CampaignRun.campaign)
+        ).filter(
             CampaignRun.id == campaign_run_id
         ).first()
         
@@ -58,10 +60,7 @@ def execute_campaign_run(self, campaign_run_id: int):
             logger.error(f"❌ Campaign run {campaign_run_id} not found")
             return
         
-        # Get campaign
-        campaign = db.query(Campaign).filter(
-            Campaign.id == campaign_run.campaign_id
-        ).first()
+        campaign = campaign_run.campaign  # No extra query — already loaded via JOIN
         
         if not campaign:
             logger.error(f"❌ Campaign {campaign_run.campaign_id} not found")
@@ -95,9 +94,10 @@ def execute_campaign_run(self, campaign_run_id: int):
         
         logger.info(f"📋 Found {len(contacts)} contacts to message")
         
-        # Create message records and queue sending tasks
+        # Create message records in batch and queue sending tasks
         sent_count = 0
         failed_count = 0
+        messages = []
         
         for contact in contacts:
             # Create message record
@@ -111,12 +111,15 @@ def execute_campaign_run(self, campaign_run_id: int):
                 scheduled_at=datetime.utcnow()
             )
             db.add(message)
-            db.commit()
-            db.refresh(message)
-            
-            # Queue message sending task
-            send_campaign_message.delay(message.id)
+            messages.append(message)
             sent_count += 1
+        
+        # Single batch commit for all messages instead of per-message commit
+        db.commit()
+        
+        # Queue message sending tasks after commit (so IDs are available)
+        for message in messages:
+            send_campaign_message.delay(message.id)
         
         # Update campaign run statistics
         campaign_run.total_sent = sent_count
@@ -150,24 +153,28 @@ def send_campaign_message(self, message_id: int):
     db = self.db
     
     try:
-        # Get message
+        # Get message with related data eagerly loaded (1 query instead of 4)
         message = db.query(Message).filter(Message.id == message_id).first()
         
         if not message:
             logger.error(f"❌ Message {message_id} not found")
             return
         
-        # Get related data
-        campaign = db.query(Campaign).filter(Campaign.id == message.campaign_id).first()
-        contact = db.query(Contact).filter(Contact.id == message.contact_id).first()
-        template = db.query(Template).filter(Template.id == message.template_id).first()
+        # Get related data in a single query via JOIN
+        related = db.query(Campaign, Contact, Template).filter(
+            Campaign.id == message.campaign_id,
+            Contact.id == message.contact_id,
+            Template.id == message.template_id
+        ).first()
         
-        if not all([campaign, contact, template]):
+        if not related:
             logger.error(f"❌ Missing data for message {message_id}")
             message.status = MessageStatus.FAILED
             message.error_message = "Missing campaign, contact, or template data"
             db.commit()
             return
+        
+        campaign, contact, template = related
         
         # Update message status
         message.status = MessageStatus.SENDING

@@ -47,8 +47,9 @@ class Campaign(Base):
     campaign_runs = relationship("CampaignRun", back_populates="campaign", cascade="all, delete-orphan")
     
     __table_args__ = (
-        # Index('idx_jeweller_status', 'jeweller_id', 'status'),
+        Index('idx_campaign_jeweller_status', 'jeweller_id', 'status'),
         Index('idx_jeweller_type', 'jeweller_id', 'campaign_type'),
+        Index('idx_campaign_jeweller_created', 'jeweller_id', 'created_at'),
     )
 
 

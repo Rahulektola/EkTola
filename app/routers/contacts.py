@@ -211,12 +211,17 @@ async def bulk_upload_dashboard(
             })
     
     # ---- Phase 2: Upsert deduplicated records into DB, merging with existing ----
+    # Batch-fetch all existing contacts in a single query instead of one query per phone number
+    phone_numbers = list(deduped.keys())
+    existing_contacts = db.query(Contact).filter(
+        Contact.jeweller_id == current_jeweller.id,
+        Contact.phone_number.in_(phone_numbers)
+    ).all()
+    existing_map = {c.phone_number: c for c in existing_contacts}
+    
     for normalized_mobile, entry in deduped.items():
         try:
-            existing = db.query(Contact).filter(
-                Contact.jeweller_id == current_jeweller.id,
-                Contact.phone_number == normalized_mobile
-            ).first()
+            existing = existing_map.get(normalized_mobile)
             
             if existing:
                 # Merge segment with existing DB record
@@ -323,6 +328,14 @@ async def upload_contacts(
     failed = 0
     failure_details = []
     
+    # Batch-fetch all existing contacts for this jeweller to avoid N queries
+    all_phone_numbers = [str(row['phone_number']).strip() for _, row in df.iterrows()]
+    existing_contacts = db.query(Contact).filter(
+        Contact.jeweller_id == current_jeweller.id,
+        Contact.phone_number.in_(all_phone_numbers)
+    ).all()
+    existing_map = {c.phone_number: c for c in existing_contacts}
+    
     for idx, row in df.iterrows():
         try:
             phone_number = str(row['phone_number']).strip()
@@ -335,11 +348,8 @@ async def upload_contacts(
             if language not in [l.value for l in Language]:
                 raise ValueError(f"Invalid language: {language}")
             
-            # Check if contact exists
-            existing = db.query(Contact).filter(
-                Contact.jeweller_id == current_jeweller.id,
-                Contact.phone_number == phone_number
-            ).first()
+            # Look up from pre-fetched map instead of individual query
+            existing = existing_map.get(phone_number)
             
             if existing:
                 # Update existing contact

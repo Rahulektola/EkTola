@@ -62,4 +62,5 @@ class Message(Base):
         Index('idx_status_queued', 'status', 'queued_at'),
         Index('idx_status_scheduled', 'status', 'scheduled_at'),
         Index('idx_type_status', 'message_type', 'status'),
+        Index('idx_jeweller_created', 'jeweller_id', 'created_at'),
     )

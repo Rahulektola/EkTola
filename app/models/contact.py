@@ -61,6 +61,7 @@ class Contact(Base):
         Index('idx_jeweller_phone', 'jeweller_id', 'phone_number', unique=True),
         Index('idx_jeweller_segment', 'jeweller_id', 'segment'),
         Index('idx_jeweller_opted_out', 'jeweller_id', 'opted_out'),
+        Index('idx_jeweller_deleted_opted', 'jeweller_id', 'is_deleted', 'opted_out'),
         Index('idx_jeweller_sip_day', 'jeweller_id', 'sip_payment_day'),
         Index('idx_jeweller_loan_day', 'jeweller_id', 'loan_payment_day'),
         CheckConstraint('sip_payment_day IS NULL OR (sip_payment_day >= 1 AND sip_payment_day <= 31)', name='ck_sip_day_range'),

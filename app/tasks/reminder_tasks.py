@@ -273,8 +273,12 @@ def send_payment_reminders(self):
             logger.info("No contacts with payment schedules found.")
             return
 
+        # Batch-fetch all jewellers in a single query instead of one query per jeweller_id
+        jewellers = db.query(Jeweller).filter(Jeweller.id.in_(jeweller_ids)).all()
+        jeweller_map = {j.id: j for j in jewellers}
+
         for jeweller_id in jeweller_ids:
-            jeweller = db.query(Jeweller).filter(Jeweller.id == jeweller_id).first()
+            jeweller = jeweller_map.get(jeweller_id)
             if not jeweller:
                 continue
 

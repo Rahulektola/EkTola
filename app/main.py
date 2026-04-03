@@ -3,10 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from contextlib import asynccontextmanager
-import asyncio
 import logging
 
-from app.routers import admin, auth, contacts, campaigns, templates, analytics, webhooks, whatsapp_auth
+from app.services import admin_routes, auth_routes, contact_routes, campaign_routes, template_routes, analytics_routes, webhook_routes, whatsapp_auth_routes
 from app.database import engine, Base
 from app.config import settings
 
@@ -21,45 +20,13 @@ logger = logging.getLogger(__name__)
 Base.metadata.create_all(bind=engine)
 
 
-# Background task for campaign scheduler
-async def run_campaign_scheduler():
-    """Background task that runs the campaign scheduler every minute"""
-    from app.services.scheduler import campaign_scheduler
-    
-    logger.info("🚀 Campaign scheduler started")
-    
-    while True:
-        try:
-            triggered = campaign_scheduler.check_and_trigger_campaigns()
-            if triggered > 0:
-                logger.info(f"✅ Triggered {triggered} campaigns")
-        except Exception as e:
-            logger.error(f"❌ Scheduler error: {str(e)}")
-        
-        # Wait 60 seconds before next check
-        await asyncio.sleep(60)
-
-
 # Lifespan context manager for startup/shutdown events
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan events"""
-    # Startup
     logger.info("🎯 Starting EkTola API")
-    
-    # TODO: Start campaign scheduler as background task (requires celery)
-    # scheduler_task = asyncio.create_task(run_campaign_scheduler())
-    # logger.info("📅 Campaign scheduler initialized")
-    
-    yield  # Application runs
-    
-    # Shutdown
+    yield
     logger.info("🛑 Shutting down EkTola API")
-    # scheduler_task.cancel()
-    # try:
-    #     await scheduler_task
-    # except asyncio.CancelledError:
-    #     logger.info("✅ Scheduler stopped")
 
 # Middleware to add no-cache headers
 class NoCacheMiddleware(BaseHTTPMiddleware):
@@ -96,14 +63,14 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(admin.router)
-app.include_router(auth.router)
-app.include_router(whatsapp_auth.router)
-app.include_router(contacts.router)
-app.include_router(campaigns.router)
-app.include_router(templates.router)
-app.include_router(analytics.router)
-app.include_router(webhooks.router)
+app.include_router(admin_routes.router)
+app.include_router(auth_routes.router)
+app.include_router(whatsapp_auth_routes.router)
+app.include_router(contact_routes.router)
+app.include_router(campaign_routes.router)
+app.include_router(template_routes.router)
+app.include_router(analytics_routes.router)
+app.include_router(webhook_routes.router)
 
 
 @app.get("/")

@@ -14,7 +14,6 @@ import logging
 from datetime import datetime, date, timedelta
 from typing import List, Optional
 
-from celery import Task
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -30,27 +29,12 @@ from app.utils.enums import (
     MessageType,
     Language,
 )
+from app.services.base_task import DatabaseTask
 
 logger = logging.getLogger(__name__)
 
 # IST offset from UTC
 IST_OFFSET = timedelta(hours=5, minutes=30)
-
-
-class DatabaseTask(Task):
-    """Base task that provides a database session"""
-    _db: Optional[Session] = None
-
-    @property
-    def db(self) -> Session:
-        if self._db is None:
-            self._db = SessionLocal()
-        return self._db
-
-    def after_return(self, *args, **kwargs):
-        if self._db is not None:
-            self._db.close()
-            self._db = None
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +210,7 @@ def _send_reminder(
 @celery_app.task(
     bind=True,
     base=DatabaseTask,
-    name="app.tasks.reminder_tasks.send_payment_reminders",
+    name="app.services.reminder_tasks.send_payment_reminders",
     queue="campaigns",
 )
 def send_payment_reminders(self):

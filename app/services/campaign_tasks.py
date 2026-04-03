@@ -7,7 +7,6 @@ import logging
 from datetime import datetime, timedelta
 from typing import List
 from sqlalchemy.orm import Session, joinedload
-from celery import Task
 
 from app.celery_app import celery_app
 from app.database import SessionLocal
@@ -16,29 +15,13 @@ from app.models.message import Message
 from app.models.contact import Contact
 from app.models.template import Template
 from app.utils.enums import CampaignStatus, MessageStatus, CampaignType, RecurrenceType
-from app.services.whatsapp import whatsapp_service
+from app.services.whatsapp_service import whatsapp_service
+from app.services.base_task import DatabaseTask
 
 logger = logging.getLogger(__name__)
 
 
-class DatabaseTask(Task):
-    """Base task that provides database session"""
-    _db = None
-    
-    @property
-    def db(self) -> Session:
-        if self._db is None:
-            self._db = SessionLocal()
-        return self._db
-    
-    def after_return(self, *args, **kwargs):
-        """Clean up database connection after task completes"""
-        if self._db is not None:
-            self._db.close()
-            self._db = None
-
-
-@celery_app.task(bind=True, base=DatabaseTask, name='app.tasks.campaign_tasks.execute_campaign_run')
+@celery_app.task(bind=True, base=DatabaseTask, name='app.services.campaign_tasks.execute_campaign_run')
 def execute_campaign_run(self, campaign_run_id: int):
     """
     Execute a campaign run - send messages to all target contacts
@@ -142,7 +125,7 @@ def execute_campaign_run(self, campaign_run_id: int):
         raise
 
 
-@celery_app.task(bind=True, base=DatabaseTask, name='app.tasks.campaign_tasks.send_campaign_message')
+@celery_app.task(bind=True, base=DatabaseTask, name='app.services.campaign_tasks.send_campaign_message')
 def send_campaign_message(self, message_id: int):
     """
     Send a single campaign message via WhatsApp
@@ -218,7 +201,7 @@ def send_campaign_message(self, message_id: int):
         raise self.retry(exc=e, countdown=60, max_retries=3)
 
 
-@celery_app.task(bind=True, base=DatabaseTask, name='app.tasks.campaign_tasks.check_pending_campaigns')
+@celery_app.task(bind=True, base=DatabaseTask, name='app.services.campaign_tasks.check_pending_campaigns')
 def check_pending_campaigns(self):
     """
     Periodic task: Check for campaigns that should be executed now

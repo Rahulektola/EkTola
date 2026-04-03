@@ -265,9 +265,9 @@ async def list_whatsapp_templates(
     """
     Admin: List all templates directly from WhatsApp Business Account
     """
-    from app.utils.whatsapp import get_whatsapp_templates
+    from app.services.whatsapp_service import whatsapp_service as wa_service
     
-    templates = await get_whatsapp_templates(
+    templates = await wa_service.get_templates(
         limit=limit,
         status_filter=status_filter
     )

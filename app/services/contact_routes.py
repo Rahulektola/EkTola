@@ -17,7 +17,7 @@ from app.schemas.contact import (
     ReminderPreviewResponse,
 )
 from app.utils.enums import SegmentType, Language
-from app.utils.whatsapp import normalize_phone_number, validate_phone_number
+from app.services.whatsapp_service import normalize_phone_number, validate_phone_number
 import pandas as pd
 import io
 from datetime import datetime

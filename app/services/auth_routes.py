@@ -11,7 +11,7 @@ from app.models.user import User
 from app.models.jeweller import Jeweller
 from app.core.security import verify_password, get_password_hash, create_access_token, create_refresh_token
 from app.core.dependencies import get_current_user, create_token_data
-from app.utils.whatsapp import send_whatsapp_otp, validate_phone_number, normalize_phone_number
+from app.services.whatsapp_service import send_whatsapp_otp, validate_phone_number, normalize_phone_number
 import secrets
 from datetime import datetime, timedelta
 

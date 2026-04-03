@@ -12,11 +12,14 @@ celery_app = Celery(
     broker=settings.REDIS_URL,
     backend=settings.REDIS_URL,
     include=[
-        'app.tasks.campaign_tasks',  # Import campaign tasks
-        'app.tasks.token_refresh',   # Import token refresh tasks
-        'app.tasks.reminder_tasks',  # Import SIP/Loan reminder tasks
+        'app.services.campaign_tasks',   # Campaign execution tasks
+        'app.services.token_refresh',    # Token refresh tasks
+        'app.services.reminder_tasks',   # SIP/Loan reminder tasks
     ]
 )
+
+# Alias for backward compatibility (token_refresh.py imports 'celery')
+celery = celery_app
 
 # Celery configuration
 celery_app.conf.update(
@@ -29,8 +32,8 @@ celery_app.conf.update(
     
     # Task routing
     task_routes={
-        'app.tasks.campaign_tasks.*': {'queue': 'campaigns'},
-        'app.tasks.reminder_tasks.*': {'queue': 'campaigns'},
+        'app.services.campaign_tasks.*': {'queue': 'campaigns'},
+        'app.services.reminder_tasks.*': {'queue': 'campaigns'},
     },
     
     # Task execution settings
@@ -56,11 +59,11 @@ celery_app.conf.update(
     # Beat schedule (periodic tasks)
     beat_schedule={
         'check-pending-campaigns': {
-            'task': 'app.tasks.campaign_tasks.check_pending_campaigns',
+            'task': 'app.services.campaign_tasks.check_pending_campaigns',
             'schedule': crontab(minute='*/1'),  # Every minute
         },
         'send-payment-reminders': {
-            'task': 'app.tasks.reminder_tasks.send_payment_reminders',
+            'task': 'app.services.reminder_tasks.send_payment_reminders',
             'schedule': crontab(hour=9, minute=0),  # Daily at 9:00 AM IST
         },
         'refresh-expiring-whatsapp-tokens': {
@@ -78,4 +81,4 @@ celery_app.conf.update(
 celery_app.conf.result_backend = settings.REDIS_URL
 
 # Task autodiscovery (finds tasks in registered modules)
-celery_app.autodiscover_tasks(['app.tasks'])
+celery_app.autodiscover_tasks(['app.services'])

@@ -4,6 +4,7 @@ Handles messaging, template management, and webhook processing
 Uses pywa for async support with FastAPI
 Now supports multi-tenant: per-jeweller WhatsApp clients + platform client
 """
+import re
 import logging
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
@@ -1035,3 +1036,52 @@ async def send_template_message(
             "error": result.error,
             "error_code": result.error_code,
         }
+
+
+# ==================== PHONE NUMBER UTILITIES ====================
+
+def normalize_phone_number(phone_number: str) -> str:
+    """
+    Normalize phone number to E.164 format
+    Accepts: +919876543210, +91 9876543210, 9876543210
+
+    Args:
+        phone_number: Phone number in various formats
+
+    Returns:
+        str: Phone number in E.164 format (+919876543210)
+    """
+    # Remove all spaces, dashes, and parentheses
+    cleaned = re.sub(r'[\s\-\(\)]', '', phone_number)
+
+    # If it starts with +91, keep as is
+    if cleaned.startswith('+91'):
+        return cleaned
+
+    # If it starts with 91 (without +), add +
+    if cleaned.startswith('91') and len(cleaned) == 12:
+        return '+' + cleaned
+
+    # If it's 10 digits starting with 6-9, assume Indian number
+    if re.match(r'^[6-9]\d{9}$', cleaned):
+        return '+91' + cleaned
+
+    # Return as is if already in other format
+    return cleaned
+
+
+def validate_phone_number(phone_number: str) -> bool:
+    """
+    Validate phone number is in E.164 format
+
+    Args:
+        phone_number: Phone number to validate
+
+    Returns:
+        bool: True if valid E.164 format
+    """
+    # Normalize first
+    normalized = normalize_phone_number(phone_number)
+    # E.164 format: +[country code][number] (max 15 digits)
+    pattern = r'^\+[1-9]\d{1,14}$'
+    return bool(re.match(pattern, normalized))

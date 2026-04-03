@@ -17,7 +17,7 @@ from app.models.message import Message
 from app.core.dependencies import get_current_admin
 from app.core.security import create_access_token
 from app.utils.enums import ApprovalStatus, MessageStatus, CampaignStatus, SegmentType, Language
-from app.utils.whatsapp import normalize_phone_number, validate_phone_number
+from app.services.whatsapp_service import normalize_phone_number, validate_phone_number
 from app.schemas.admin import (
     JewellerDetailResponse, JewellerListResponse,
     JewellerUpdateRequest, AdminNotesRequest, MetaStatusUpdateRequest,

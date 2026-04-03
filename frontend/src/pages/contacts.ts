@@ -15,6 +15,12 @@ interface Contact {
   segment: string;
   preferred_language: string;
   opted_out: boolean;
+  sip_payment_day: number | null;
+  loan_payment_day: number | null;
+  sip_reminder_days_before: number;
+  loan_reminder_days_before: number;
+  last_sip_reminder_sent_at: string | null;
+  last_loan_reminder_sent_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -62,6 +68,7 @@ const PAGE_SIZE = 50;
 
 let currentPage = 1;
 let currentSegmentFilter = '';
+let currentPaymentDayFilter = '';
 let currentSearch = '';
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 let selectedFile: File | null = null;
@@ -126,6 +133,15 @@ function initEventListeners(): void {
     loadContacts();
   });
 
+  // Payment day filter
+  const paymentDayFilter = document.getElementById('paymentDayFilter') as HTMLSelectElement;
+  paymentDayFilter?.addEventListener('change', () => {
+    currentPaymentDayFilter = paymentDayFilter.value;
+    currentPage = 1;
+    clearSelection();
+    loadContacts();
+  });
+
   // Add Contact Modal
   document.getElementById('addContactBtn')?.addEventListener('click', openAddModal);
   document.getElementById('closeAddModal')?.addEventListener('click', closeAddModal);
@@ -136,6 +152,40 @@ function initEventListeners(): void {
   document.getElementById('closeEditModal')?.addEventListener('click', closeEditModal);
   document.getElementById('cancelEditContact')?.addEventListener('click', closeEditModal);
   document.getElementById('submitEditContact')?.addEventListener('click', submitEditContact);
+
+  // February month warnings — single edit modal
+  const sipDayInput = document.getElementById('editSipPaymentDay') as HTMLInputElement;
+  const loanDayInput = document.getElementById('editLoanPaymentDay') as HTMLInputElement;
+  sipDayInput?.addEventListener('input', () => updateMonthWarning(sipDayInput, 'sipMonthWarning'));
+  loanDayInput?.addEventListener('input', () => updateMonthWarning(loanDayInput, 'loanMonthWarning'));
+
+  // Bulk Edit Modal
+  document.getElementById('editSelectedBtn')?.addEventListener('click', openBulkEditModal);
+  document.getElementById('closeBulkEditModal')?.addEventListener('click', closeBulkEditModal);
+  document.getElementById('cancelBulkEdit')?.addEventListener('click', closeBulkEditModal);
+  document.getElementById('submitBulkEdit')?.addEventListener('click', submitBulkEdit);
+
+  // Bulk edit — segment change drives schedule visibility
+  const bulkSegmentSelect = document.getElementById('bulkSegment') as HTMLSelectElement;
+  bulkSegmentSelect?.addEventListener('change', () => updateBulkScheduleVisibility(bulkSegmentSelect.value));
+
+  // Bulk edit — SIP/Loan action toggles
+  const bulkSipAction = document.getElementById('bulkSipAction') as HTMLSelectElement;
+  bulkSipAction?.addEventListener('change', () => {
+    const group = document.getElementById('bulkSipDayGroup');
+    if (group) group.style.display = bulkSipAction.value === 'set' ? 'block' : 'none';
+  });
+  const bulkLoanAction = document.getElementById('bulkLoanAction') as HTMLSelectElement;
+  bulkLoanAction?.addEventListener('change', () => {
+    const group = document.getElementById('bulkLoanDayGroup');
+    if (group) group.style.display = bulkLoanAction.value === 'set' ? 'block' : 'none';
+  });
+
+  // February month warnings — bulk edit modal
+  const bulkSipDayInput = document.getElementById('bulkSipPaymentDay') as HTMLInputElement;
+  const bulkLoanDayInput = document.getElementById('bulkLoanPaymentDay') as HTMLInputElement;
+  bulkSipDayInput?.addEventListener('input', () => updateMonthWarning(bulkSipDayInput, 'bulkSipMonthWarning'));
+  bulkLoanDayInput?.addEventListener('input', () => updateMonthWarning(bulkLoanDayInput, 'bulkLoanMonthWarning'));
 
   // Bulk Upload Modal
   document.getElementById('bulkUploadBtn')?.addEventListener('click', openBulkModal);
@@ -197,6 +247,9 @@ async function loadContacts(): Promise<void> {
     }
     if (currentSearch) {
       params.set('search', currentSearch);
+    }
+    if (currentPaymentDayFilter) {
+      params.set('payment_day', currentPaymentDayFilter);
     }
 
     const response = await fetch(`${API_BASE}/contacts/?${params}`, {
@@ -270,8 +323,8 @@ function renderContacts(data: ContactListResponse): void {
       <div class="empty-state">
         <div class="empty-state-icon">👥</div>
         <h3>No contacts found</h3>
-        <p>${currentSearch || currentSegmentFilter ? 'Try changing your search or filter.' : 'Add contacts to get started!'}</p>
-        ${!currentSearch && !currentSegmentFilter ? '<button class="btn btn-primary" id="emptyAddBtn">➕ Add Your First Contact</button>' : ''}
+        <p>${currentSearch || currentSegmentFilter || currentPaymentDayFilter ? 'Try changing your search or filter.' : 'Add contacts to get started!'}</p>
+        ${!currentSearch && !currentSegmentFilter && !currentPaymentDayFilter ? '<button class="btn btn-primary" id="emptyAddBtn">➕ Add Your First Contact</button>' : ''}
       </div>
     `;
 
@@ -289,6 +342,7 @@ function renderContacts(data: ContactListResponse): void {
           <th>Name</th>
           <th>Phone</th>
           <th>Segment</th>
+          <th>Payment Day</th>
           <th class="contact-actions-cell">Edit</th>
         </tr>
       </thead>
@@ -306,11 +360,16 @@ function renderContacts(data: ContactListResponse): void {
                 ${SEGMENT_DISPLAY[contact.segment] || contact.segment}
               </span>
             </td>
+            <td style="font-size: 13px; color: var(--text-secondary);">${formatPaymentDayCell(contact)}</td>
             <td class="contact-actions-cell">
               <button class="btn-edit" data-contact-id="${contact.id}"
                 data-contact-name="${escapeHtml(contact.name || '')}"
                 data-contact-phone="${escapeHtml(contact.phone_number)}"
                 data-contact-segment="${contact.segment}"
+                data-sip-payment-day="${contact.sip_payment_day ?? ''}"
+                data-loan-payment-day="${contact.loan_payment_day ?? ''}"
+                data-sip-reminder-days="${contact.sip_reminder_days_before ?? 3}"
+                data-loan-reminder-days="${contact.loan_reminder_days_before ?? 3}"
                 title="Edit contact">✏️</button>
             </td>
           </tr>
@@ -580,17 +639,96 @@ function attachEditListeners(): void {
       const name = el.dataset.contactName || '';
       const phone = el.dataset.contactPhone || '';
       const segment = el.dataset.contactSegment || 'MARKETING';
-      openEditModal(id, name, phone, segment);
+      const sipPaymentDay = el.dataset.sipPaymentDay || '';
+      const loanPaymentDay = el.dataset.loanPaymentDay || '';
+      const sipReminderDays = el.dataset.sipReminderDays || '3';
+      const loanReminderDays = el.dataset.loanReminderDays || '3';
+      openEditModal(id, name, phone, segment, sipPaymentDay, loanPaymentDay, sipReminderDays, loanReminderDays);
     });
   });
 }
 
-function openEditModal(id: number, name: string, phone: string, segment: string): void {
+function updateScheduleVisibility(segment: string): void {
+  const sipGroup = document.getElementById('sipScheduleGroup');
+  const loanGroup = document.getElementById('loanScheduleGroup');
+  const noScheduleNote = document.getElementById('noScheduleNote');
+
+  const showSip = segment === 'GOLD_SIP' || segment === 'BOTH';
+  const showLoan = segment === 'GOLD_LOAN' || segment === 'BOTH';
+  const isMarketing = segment === 'MARKETING';
+
+  if (sipGroup) {
+    sipGroup.classList.toggle('hidden', !showSip);
+    if (!showSip) {
+      (document.getElementById('editSipPaymentDay') as HTMLInputElement).value = '';
+      (document.getElementById('editSipReminderDays') as HTMLSelectElement).value = '3';
+    }
+  }
+  if (loanGroup) {
+    loanGroup.classList.toggle('hidden', !showLoan);
+    if (!showLoan) {
+      (document.getElementById('editLoanPaymentDay') as HTMLInputElement).value = '';
+      (document.getElementById('editLoanReminderDays') as HTMLSelectElement).value = '3';
+    }
+  }
+  if (noScheduleNote) {
+    noScheduleNote.classList.toggle('hidden', !isMarketing);
+  }
+}
+
+function attachScheduleClearListeners(): void {
+  const clearSipBtn = document.getElementById('clearSipDay');
+  const clearLoanBtn = document.getElementById('clearLoanDay');
+
+  if (clearSipBtn) {
+    clearSipBtn.onclick = () => {
+      const input = document.getElementById('editSipPaymentDay') as HTMLInputElement;
+      input.value = '';
+      updateMonthWarning(input, 'sipMonthWarning');
+    };
+  }
+
+  if (clearLoanBtn) {
+    clearLoanBtn.onclick = () => {
+      const input = document.getElementById('editLoanPaymentDay') as HTMLInputElement;
+      input.value = '';
+      updateMonthWarning(input, 'loanMonthWarning');
+    };
+  }
+}
+
+function openEditModal(
+  id: number, name: string, phone: string, segment: string,
+  sipPaymentDay: string, loanPaymentDay: string,
+  sipReminderDays: string, loanReminderDays: string
+): void {
   editingContactId = id;
   (document.getElementById('editContactId') as HTMLInputElement).value = id.toString();
   (document.getElementById('editContactPhone') as HTMLInputElement).value = phone;
   (document.getElementById('editContactName') as HTMLInputElement).value = name;
-  (document.getElementById('editContactSegment') as HTMLSelectElement).value = segment;
+
+  const segmentSelect = document.getElementById('editContactSegment') as HTMLSelectElement;
+  segmentSelect.value = segment;
+
+  // Populate payment schedule fields
+  (document.getElementById('editSipPaymentDay') as HTMLInputElement).value = sipPaymentDay;
+  (document.getElementById('editLoanPaymentDay') as HTMLInputElement).value = loanPaymentDay;
+  (document.getElementById('editSipReminderDays') as HTMLSelectElement).value = sipReminderDays;
+  (document.getElementById('editLoanReminderDays') as HTMLSelectElement).value = loanReminderDays;
+
+  // Show/hide schedule fields based on segment
+  updateScheduleVisibility(segment);
+
+  // Attach clear button listeners
+  attachScheduleClearListeners();
+
+  // Trigger month warnings for pre-populated values
+  updateMonthWarning(document.getElementById('editSipPaymentDay') as HTMLInputElement, 'sipMonthWarning');
+  updateMonthWarning(document.getElementById('editLoanPaymentDay') as HTMLInputElement, 'loanMonthWarning');
+
+  // Update visibility live when segment changes
+  segmentSelect.onchange = () => updateScheduleVisibility(segmentSelect.value);
+
   document.getElementById('editContactModal')?.classList.add('active');
 }
 
@@ -610,8 +748,42 @@ async function submitEditContact(): Promise<void> {
   submitBtn.textContent = 'Saving...';
 
   try {
-    const body: Record<string, string> = { segment };
+    const body: Record<string, string | number | null> = { segment };
     if (name) body.name = name;
+
+    // Include payment schedule fields based on segment
+    const canSip = segment === 'GOLD_SIP' || segment === 'BOTH';
+    const canLoan = segment === 'GOLD_LOAN' || segment === 'BOTH';
+
+    if (canSip) {
+      const sipDayVal = (document.getElementById('editSipPaymentDay') as HTMLInputElement).value.trim();
+      const sipDay = sipDayVal ? parseInt(sipDayVal, 10) : null;
+      // Validate range
+      if (sipDay !== null && (sipDay < 1 || sipDay > 31)) {
+        throw new Error('SIP payment day must be between 1 and 31');
+      }
+      body.sip_payment_day = sipDay;
+      body.sip_reminder_days_before = parseInt(
+        (document.getElementById('editSipReminderDays') as HTMLSelectElement).value, 10
+      );
+    } else {
+      body.sip_payment_day = null;
+    }
+
+    if (canLoan) {
+      const loanDayVal = (document.getElementById('editLoanPaymentDay') as HTMLInputElement).value.trim();
+      const loanDay = loanDayVal ? parseInt(loanDayVal, 10) : null;
+      // Validate range
+      if (loanDay !== null && (loanDay < 1 || loanDay > 31)) {
+        throw new Error('Loan payment day must be between 1 and 31');
+      }
+      body.loan_payment_day = loanDay;
+      body.loan_reminder_days_before = parseInt(
+        (document.getElementById('editLoanReminderDays') as HTMLSelectElement).value, 10
+      );
+    } else {
+      body.loan_payment_day = null;
+    }
 
     const response = await fetch(`${API_BASE}/contacts/${editingContactId}`, {
       method: 'PATCH',
@@ -693,16 +865,20 @@ function attachCheckboxListeners(contacts: Contact[]): void {
 }
 
 function updateDeleteButton(): void {
-  const btn = document.getElementById('deleteSelectedBtn');
-  const countEl = document.getElementById('deleteCount');
-  if (!btn) return;
+  const deleteBtn = document.getElementById('deleteSelectedBtn');
+  const deleteCountEl = document.getElementById('deleteCount');
+  const editBtn = document.getElementById('editSelectedBtn');
+  const editCountEl = document.getElementById('editCount');
 
   const count = selectedContactIds.size;
   if (count > 0) {
-    btn.classList.add('show');
-    if (countEl) countEl.textContent = count.toString();
+    deleteBtn?.classList.add('show');
+    editBtn?.classList.add('show');
+    if (deleteCountEl) deleteCountEl.textContent = count.toString();
+    if (editCountEl) editCountEl.textContent = count.toString();
   } else {
-    btn.classList.remove('show');
+    deleteBtn?.classList.remove('show');
+    editBtn?.classList.remove('show');
   }
 }
 
@@ -761,5 +937,208 @@ async function confirmBulkDelete(): Promise<void> {
   } finally {
     confirmBtn.disabled = false;
     confirmBtn.textContent = '🗑️ Delete';
+  }
+}
+
+// ========== February / Short-Month Warning ==========
+
+function updateMonthWarning(input: HTMLInputElement, warningId: string): void {
+  const warning = document.getElementById(warningId);
+  if (!warning) return;
+
+  const day = parseInt(input.value, 10);
+  if (day >= 29) {
+    warning.classList.add('show');
+  } else {
+    warning.classList.remove('show');
+  }
+}
+
+// ========== Payment Day Cell Formatter ==========
+
+function formatPaymentDayCell(contact: Contact): string {
+  const parts: string[] = [];
+
+  if (contact.sip_payment_day) {
+    parts.push(`SIP: ${ordinal(contact.sip_payment_day)}`);
+  }
+  if (contact.loan_payment_day) {
+    parts.push(`Loan: ${ordinal(contact.loan_payment_day)}`);
+  }
+
+  return parts.length > 0 ? parts.join('<br>') : '—';
+}
+
+function ordinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+// ========== Bulk Edit Modal ==========
+
+function openBulkEditModal(): void {
+  const count = selectedContactIds.size;
+  if (count === 0) return;
+
+  setTextContent('bulkEditCount', count.toString());
+  setTextContent('bulkEditCountNote', count.toString());
+
+  // Reset form
+  (document.getElementById('bulkSegment') as HTMLSelectElement).value = '';
+  (document.getElementById('bulkSipAction') as HTMLSelectElement).value = 'keep';
+  (document.getElementById('bulkLoanAction') as HTMLSelectElement).value = 'keep';
+  const sipDayGroup = document.getElementById('bulkSipDayGroup');
+  const loanDayGroup = document.getElementById('bulkLoanDayGroup');
+  if (sipDayGroup) sipDayGroup.style.display = 'none';
+  if (loanDayGroup) loanDayGroup.style.display = 'none';
+  (document.getElementById('bulkSipPaymentDay') as HTMLInputElement).value = '';
+  (document.getElementById('bulkLoanPaymentDay') as HTMLInputElement).value = '';
+  (document.getElementById('bulkSipReminderDays') as HTMLSelectElement).value = '';
+  (document.getElementById('bulkLoanReminderDays') as HTMLSelectElement).value = '';
+
+  // Reset warnings
+  document.getElementById('bulkSipMonthWarning')?.classList.remove('show');
+  document.getElementById('bulkLoanMonthWarning')?.classList.remove('show');
+
+  // Show all schedule groups by default (mixed selection)
+  updateBulkScheduleVisibility('');
+
+  document.getElementById('bulkEditModal')?.classList.add('active');
+}
+
+function closeBulkEditModal(): void {
+  document.getElementById('bulkEditModal')?.classList.remove('active');
+}
+
+function updateBulkScheduleVisibility(segment: string): void {
+  const sipGroup = document.getElementById('bulkSipScheduleGroup');
+  const loanGroup = document.getElementById('bulkLoanScheduleGroup');
+  const noScheduleNote = document.getElementById('bulkNoScheduleNote');
+
+  if (segment === 'MARKETING') {
+    // Marketing: hide all schedule fields
+    sipGroup?.classList.add('hidden');
+    loanGroup?.classList.add('hidden');
+    noScheduleNote?.classList.remove('hidden');
+  } else if (segment === 'GOLD_SIP') {
+    sipGroup?.classList.remove('hidden');
+    loanGroup?.classList.add('hidden');
+    noScheduleNote?.classList.add('hidden');
+  } else if (segment === 'GOLD_LOAN') {
+    sipGroup?.classList.add('hidden');
+    loanGroup?.classList.remove('hidden');
+    noScheduleNote?.classList.add('hidden');
+  } else {
+    // BOTH or "" (Keep Current) — show all
+    sipGroup?.classList.remove('hidden');
+    loanGroup?.classList.remove('hidden');
+    noScheduleNote?.classList.add('hidden');
+  }
+}
+
+async function submitBulkEdit(): Promise<void> {
+  const count = selectedContactIds.size;
+  if (count === 0) return;
+
+  const segment = (document.getElementById('bulkSegment') as HTMLSelectElement).value;
+  const sipAction = (document.getElementById('bulkSipAction') as HTMLSelectElement).value;
+  const loanAction = (document.getElementById('bulkLoanAction') as HTMLSelectElement).value;
+
+  // Build request body — only include fields that should change
+  const body: Record<string, unknown> = {
+    contact_ids: Array.from(selectedContactIds),
+  };
+
+  if (segment) {
+    body.segment = segment;
+  }
+
+  // SIP schedule
+  if (sipAction === 'clear') {
+    body.clear_sip_schedule = true;
+  } else if (sipAction === 'set') {
+    const sipDayVal = (document.getElementById('bulkSipPaymentDay') as HTMLInputElement).value.trim();
+    const sipDay = sipDayVal ? parseInt(sipDayVal, 10) : null;
+    if (sipDay !== null) {
+      if (sipDay < 1 || sipDay > 31) {
+        alert('❌ SIP payment day must be between 1 and 31');
+        return;
+      }
+      body.sip_payment_day = sipDay;
+    }
+    const sipReminder = (document.getElementById('bulkSipReminderDays') as HTMLSelectElement).value;
+    if (sipReminder) {
+      body.sip_reminder_days_before = parseInt(sipReminder, 10);
+    }
+  }
+
+  // Loan schedule
+  if (loanAction === 'clear') {
+    body.clear_loan_schedule = true;
+  } else if (loanAction === 'set') {
+    const loanDayVal = (document.getElementById('bulkLoanPaymentDay') as HTMLInputElement).value.trim();
+    const loanDay = loanDayVal ? parseInt(loanDayVal, 10) : null;
+    if (loanDay !== null) {
+      if (loanDay < 1 || loanDay > 31) {
+        alert('❌ Loan payment day must be between 1 and 31');
+        return;
+      }
+      body.loan_payment_day = loanDay;
+    }
+    const loanReminder = (document.getElementById('bulkLoanReminderDays') as HTMLSelectElement).value;
+    if (loanReminder) {
+      body.loan_reminder_days_before = parseInt(loanReminder, 10);
+    }
+  }
+
+  // Check if anything changed
+  const hasChanges = segment || sipAction !== 'keep' || loanAction !== 'keep';
+  if (!hasChanges) {
+    alert('ℹ️ No changes selected. Adjust at least one field.');
+    return;
+  }
+
+  const submitBtn = document.getElementById('submitBulkEdit') as HTMLButtonElement;
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Applying...';
+
+  try {
+    const response = await fetch(`${API_BASE}/contacts/bulk-update`, {
+      method: 'POST',
+      headers: window.authService.getAuthHeaders(),
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.authService.logout();
+        window.location.href = '/index.html';
+        return;
+      }
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to update contacts');
+    }
+
+    const result = await response.json();
+
+    closeBulkEditModal();
+    clearSelection();
+
+    let msg = `✅ ${result.message}`;
+    if (result.failed > 0 && result.failure_details.length > 0) {
+      msg += '\n\nFailed contacts:\n' + result.failure_details
+        .map((d: { contact_id: number; reason: string }) => `• ID ${d.contact_id}: ${d.reason}`)
+        .join('\n');
+    }
+    alert(msg);
+
+    loadContacts();
+    loadStats();
+  } catch (err) {
+    alert(`❌ ${err instanceof Error ? err.message : 'Failed to update contacts'}`);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Apply Changes';
   }
 }

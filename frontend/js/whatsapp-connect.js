@@ -250,9 +250,9 @@ async function launchWhatsAppSignup() {
       response_type: 'code',                // Must be 'code' for System User token
       override_default_response_type: true,
       extras: {
-        setup: {},
-        featureType: 'whatsapp_embedded_signup',
-        sessionInfoVersion: 2 // Enable session info via postMessage
+        featureType: 'whatsapp_business_app_onboarding',
+        sessionInfoVersion: '3',
+        version: 'v3'
       }
     });
     

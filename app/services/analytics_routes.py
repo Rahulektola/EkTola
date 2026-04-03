@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, Integer, text
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func, and_, Integer, text, case, literal_column
 from typing import List
 from datetime import datetime, timedelta
 from app.database import get_db
@@ -80,15 +80,17 @@ def get_jeweller_dashboard(
         Contact.is_deleted == False
     ).group_by(Contact.segment).all()
     
-    # Recent campaign runs (top 5)
-    recent_runs = db.query(CampaignRun).filter(
+    # Recent campaign runs (top 5) — JOIN campaign to avoid N+1
+    recent_runs = db.query(CampaignRun).options(
+        joinedload(CampaignRun.campaign)
+    ).filter(
         CampaignRun.jeweller_id == current_jeweller.id,
         CampaignRun.status == "COMPLETED"
     ).order_by(CampaignRun.completed_at.desc()).limit(5).all()
     
     campaign_stats = []
     for run in recent_runs:
-        campaign = db.query(Campaign).filter(Campaign.id == run.campaign_id).first()
+        campaign = run.campaign  # No extra query — already loaded via JOIN
         if campaign:
             delivery_rate = (run.messages_delivered / run.messages_sent * 100) if run.messages_sent > 0 else 0
             read_rate = (run.messages_read / run.messages_delivered * 100) if run.messages_delivered > 0 else 0
@@ -161,48 +163,63 @@ def get_admin_dashboard(
     overall_delivery_rate = (overall_delivered / total_messages * 100) if total_messages > 0 else 0
     overall_read_rate = (overall_read / overall_delivered * 100) if overall_delivered > 0 else 0
     
-    # Per-jeweller stats
-    jeweller_stats = []
-    jewellers = db.query(Jeweller).all()
+    # Per-jeweller stats — single aggregated query using LEFT JOINs instead of N+1 loop
+    # This replaces ~400+ queries (for 100 jewellers) with 1 query
+    jeweller_agg = db.execute(text("""
+        SELECT 
+            j.id AS jeweller_id,
+            j.business_name,
+            COALESCE(c_stats.contact_count, 0) AS contact_count,
+            COALESCE(camp_stats.campaign_count, 0) AS campaign_count,
+            COALESCE(m_stats.message_count, 0) AS message_count,
+            COALESCE(m_stats.messages_30d, 0) AS messages_30d,
+            COALESCE(m_stats.delivered_count, 0) AS delivered_count,
+            COALESCE(m_stats.read_count, 0) AS read_count,
+            m_stats.last_message_time
+        FROM jewellers j
+        LEFT JOIN (
+            SELECT jeweller_id, COUNT(*) AS contact_count
+            FROM contacts
+            WHERE is_deleted = false
+            GROUP BY jeweller_id
+        ) c_stats ON c_stats.jeweller_id = j.id
+        LEFT JOIN (
+            SELECT jeweller_id, COUNT(*) AS campaign_count
+            FROM campaigns
+            GROUP BY jeweller_id
+        ) camp_stats ON camp_stats.jeweller_id = j.id
+        LEFT JOIN (
+            SELECT 
+                jeweller_id,
+                COUNT(*) AS message_count,
+                SUM(CASE WHEN created_at >= :thirty_days_ago THEN 1 ELSE 0 END) AS messages_30d,
+                SUM(CASE WHEN status = 'DELIVERED' THEN 1 ELSE 0 END) AS delivered_count,
+                SUM(CASE WHEN status = 'READ' THEN 1 ELSE 0 END) AS read_count,
+                MAX(created_at) AS last_message_time
+            FROM messages
+            GROUP BY jeweller_id
+        ) m_stats ON m_stats.jeweller_id = j.id
+        ORDER BY j.id
+    """), {"thirty_days_ago": thirty_days_ago}).fetchall()
     
-    for jeweller in jewellers:
-        j_contacts = db.query(func.count(Contact.id)).filter(
-            Contact.jeweller_id == jeweller.id,
-            Contact.is_deleted == False
-        ).scalar()
-        
-        j_campaigns = db.query(func.count(Campaign.id)).filter(
-            Campaign.jeweller_id == jeweller.id
-        ).scalar()
-        
-        # Use raw SQL for messages to avoid model column issues
-        j_messages = db.execute(text("SELECT COUNT(*) FROM messages WHERE jeweller_id = :jid"), {"jid": jeweller.id}).scalar() or 0
-        
-        j_messages_30d = db.execute(text("SELECT COUNT(*) FROM messages WHERE jeweller_id = :jid AND created_at >= :date"), 
-                                    {"jid": jeweller.id, "date": thirty_days_ago}).scalar() or 0
-        
-        j_delivered = db.execute(text("SELECT COUNT(*) FROM messages WHERE jeweller_id = :jid AND status = 'DELIVERED'"), 
-                                {"jid": jeweller.id}).scalar() or 0
-        j_read = db.execute(text("SELECT COUNT(*) FROM messages WHERE jeweller_id = :jid AND status = 'READ'"), 
-                           {"jid": jeweller.id}).scalar() or 0
-        
+    jeweller_stats = []
+    for row in jeweller_agg:
+        j_messages = row.message_count
+        j_delivered = row.delivered_count
+        j_read = row.read_count
         j_delivery_rate = (j_delivered / j_messages * 100) if j_messages > 0 else 0
         j_read_rate = (j_read / j_delivered * 100) if j_delivered > 0 else 0
         
-        # Last active (last message sent) - use raw SQL
-        last_message_time = db.execute(text("SELECT MAX(created_at) FROM messages WHERE jeweller_id = :jid"), 
-                                     {"jid": jeweller.id}).scalar()
-        
         jeweller_stats.append(JewellerUsageStats(
-            jeweller_id=jeweller.id,
-            business_name=jeweller.business_name,
-            total_contacts=j_contacts,
-            total_campaigns=j_campaigns,
+            jeweller_id=row.jeweller_id,
+            business_name=row.business_name,
+            total_contacts=row.contact_count,
+            total_campaigns=row.campaign_count,
             total_messages_sent=j_messages,
-            messages_last_30_days=j_messages_30d,
+            messages_last_30_days=row.messages_30d,
             delivery_rate=round(j_delivery_rate, 2),
             read_rate=round(j_read_rate, 2),
-            last_active=last_message_time
+            last_active=row.last_message_time
         ))
     
     return AdminDashboardResponse(

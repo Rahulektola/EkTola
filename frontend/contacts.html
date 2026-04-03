@@ -579,6 +579,202 @@
       margin-top: 6px;
     }
 
+    /* Payment Schedule Section */
+    .schedule-section-divider {
+      border-top: 1px solid var(--border-color);
+      margin-top: 24px;
+      padding-top: 20px;
+    }
+
+    .schedule-section-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-color);
+      margin-bottom: 16px;
+    }
+
+    .schedule-row {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .schedule-day-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .schedule-day-input {
+      width: 70px;
+      padding: 8px 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      font-size: 14px;
+      text-align: center;
+      transition: all 0.2s;
+    }
+
+    .schedule-day-input:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    .schedule-day-input::-webkit-inner-spin-button,
+    .schedule-day-input::-webkit-outer-spin-button {
+      opacity: 1;
+    }
+
+    .schedule-day-input::placeholder {
+      color: var(--text-secondary);
+      font-size: 12px;
+    }
+
+    .btn-clear-schedule {
+      padding: 6px 12px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      background: transparent;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .btn-clear-schedule:hover {
+      background: #f3f4f6;
+      color: var(--text-color);
+      border-color: var(--text-secondary);
+    }
+
+    .schedule-remind-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .schedule-remind-label {
+      font-size: 13px;
+      color: var(--text-color);
+      white-space: nowrap;
+    }
+
+    .schedule-remind-select {
+      width: 100px;
+      padding: 8px 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      font-size: 14px;
+      background: white;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .schedule-remind-select:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    .schedule-group {
+      transition: opacity 0.2s;
+    }
+
+    .schedule-group.hidden {
+      display: none;
+    }
+
+    .schedule-note {
+      font-size: 11px;
+      color: var(--text-secondary);
+      font-style: italic;
+      margin-top: 4px;
+    }
+
+    .month-warning {
+      font-size: 12px;
+      color: #b45309;
+      background: #fef3c7;
+      border: 1px solid #fcd34d;
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin-top: 8px;
+      display: none;
+      line-height: 1.5;
+    }
+
+    .month-warning.show {
+      display: block;
+    }
+
+    /* Bulk Edit Button */
+    .btn-edit-selected {
+      background: var(--primary-color);
+      color: white;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .btn-edit-selected:hover {
+      background: #4f46e5;
+    }
+
+    .btn-edit-selected.show {
+      display: inline-flex;
+    }
+
+    .edit-count-badge {
+      background: rgba(255, 255, 255, 0.25);
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    /* Bulk Edit Field Option Selector */
+    .bulk-field-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .bulk-field-option select {
+      flex: 1;
+    }
+
+    .bulk-field-action {
+      min-width: 150px;
+      padding: 8px 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      font-size: 13px;
+      background: white;
+      cursor: pointer;
+    }
+
+    .bulk-field-action:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    .bulk-apply-note {
+      font-size: 13px;
+      color: #b45309;
+      background: #fffbeb;
+      border: 1px solid #fcd34d;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
     .file-upload-area {
       border: 2px dashed var(--border-color);
       border-radius: 12px;
@@ -834,6 +1030,9 @@
         <p>Manage all your contacts and segments</p>
       </div>
       <div class="header-actions">
+        <button class="btn btn-edit-selected" id="editSelectedBtn">
+          ✏️ Edit Selected <span class="edit-count-badge" id="editCount">0</span>
+        </button>
         <button class="btn btn-delete-selected" id="deleteSelectedBtn">
           🗑️ Delete Selected <span class="delete-count-badge" id="deleteCount">0</span>
         </button>
@@ -877,6 +1076,40 @@
           <option value="GOLD_SIP">Gold SIP</option>
           <option value="BOTH">Both (SIP & Loan)</option>
           <option value="MARKETING">Marketing</option>
+        </select>
+        <select class="filter-select" id="paymentDayFilter">
+          <option value="">All Payment Days</option>
+          <option value="1">Day 1</option>
+          <option value="2">Day 2</option>
+          <option value="3">Day 3</option>
+          <option value="4">Day 4</option>
+          <option value="5">Day 5</option>
+          <option value="6">Day 6</option>
+          <option value="7">Day 7</option>
+          <option value="8">Day 8</option>
+          <option value="9">Day 9</option>
+          <option value="10">Day 10</option>
+          <option value="11">Day 11</option>
+          <option value="12">Day 12</option>
+          <option value="13">Day 13</option>
+          <option value="14">Day 14</option>
+          <option value="15">Day 15</option>
+          <option value="16">Day 16</option>
+          <option value="17">Day 17</option>
+          <option value="18">Day 18</option>
+          <option value="19">Day 19</option>
+          <option value="20">Day 20</option>
+          <option value="21">Day 21</option>
+          <option value="22">Day 22</option>
+          <option value="23">Day 23</option>
+          <option value="24">Day 24</option>
+          <option value="25">Day 25</option>
+          <option value="26">Day 26</option>
+          <option value="27">Day 27</option>
+          <option value="28">Day 28</option>
+          <option value="29">Day 29</option>
+          <option value="30">Day 30</option>
+          <option value="31">Day 31</option>
         </select>
       </div>
 
@@ -1002,6 +1235,85 @@
               <option value="MARKETING">Marketing</option>
             </select>
           </div>
+
+          <!-- Payment Schedule Section -->
+          <div class="schedule-section-divider">
+            <div class="schedule-section-title">📅 Payment Schedule</div>
+
+            <!-- SIP Schedule -->
+            <div id="sipScheduleGroup" class="schedule-group hidden">
+              <label class="form-label">SIP Payment Day</label>
+              <div class="schedule-row">
+                <div class="schedule-day-group">
+                  <input type="number" class="schedule-day-input" id="editSipPaymentDay" 
+                    min="1" max="31" step="1" placeholder="Not scheduled">
+                  <button type="button" class="btn-clear-schedule" id="clearSipDay">× Clear</button>
+                </div>
+                <div class="schedule-remind-group">
+                  <span class="schedule-remind-label">Remind:</span>
+                  <select class="schedule-remind-select" id="editSipReminderDays">
+                    <option value="1">1 day</option>
+                    <option value="2">2 days</option>
+                    <option value="3" selected>3 days</option>
+                    <option value="4">4 days</option>
+                    <option value="5">5 days</option>
+                    <option value="6">6 days</option>
+                    <option value="7">7 days</option>
+                    <option value="8">8 days</option>
+                    <option value="9">9 days</option>
+                    <option value="10">10 days</option>
+                    <option value="11">11 days</option>
+                    <option value="12">12 days</option>
+                    <option value="13">13 days</option>
+                    <option value="14">14 days</option>
+                    <option value="15">15 days</option>
+                  </select>
+                  <span class="schedule-remind-label">before</span>
+                </div>
+              </div>
+              <div class="schedule-note">Reminder will be sent N days before the SIP due date each month</div>
+              <div class="month-warning" id="sipMonthWarning">⚠️ In shorter months (e.g. February with 28/29 days), the due date will automatically adjust to the last day of that month.</div>
+            </div>
+
+            <!-- Loan Schedule -->
+            <div id="loanScheduleGroup" class="schedule-group hidden">
+              <label class="form-label">Loan Payment Day</label>
+              <div class="schedule-row">
+                <div class="schedule-day-group">
+                  <input type="number" class="schedule-day-input" id="editLoanPaymentDay" 
+                    min="1" max="31" step="1" placeholder="Not scheduled">
+                  <button type="button" class="btn-clear-schedule" id="clearLoanDay">× Clear</button>
+                </div>
+                <div class="schedule-remind-group">
+                  <span class="schedule-remind-label">Remind:</span>
+                  <select class="schedule-remind-select" id="editLoanReminderDays">
+                    <option value="1">1 day</option>
+                    <option value="2">2 days</option>
+                    <option value="3" selected>3 days</option>
+                    <option value="4">4 days</option>
+                    <option value="5">5 days</option>
+                    <option value="6">6 days</option>
+                    <option value="7">7 days</option>
+                    <option value="8">8 days</option>
+                    <option value="9">9 days</option>
+                    <option value="10">10 days</option>
+                    <option value="11">11 days</option>
+                    <option value="12">12 days</option>
+                    <option value="13">13 days</option>
+                    <option value="14">14 days</option>
+                    <option value="15">15 days</option>
+                  </select>
+                  <span class="schedule-remind-label">before</span>
+                </div>
+              </div>
+              <div class="schedule-note">Reminder will be sent N days before the Loan due date each month</div>
+              <div class="month-warning" id="loanMonthWarning">⚠️ In shorter months (e.g. February with 28/29 days), the due date will automatically adjust to the last day of that month.</div>
+            </div>
+
+            <div id="noScheduleNote" class="schedule-group hidden">
+              <div class="form-help">Payment scheduling is not available for Marketing contacts</div>
+            </div>
+          </div>
         </form>
       </div>
       <div class="modal-footer">
@@ -1030,6 +1342,134 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" id="cancelDeleteBtn">Cancel</button>
         <button class="btn btn-confirm-delete" id="confirmDeleteBtn">🗑️ Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk Edit Modal -->
+  <div class="modal-overlay" id="bulkEditModal">
+    <div class="modal" style="max-width: 560px;">
+      <div class="modal-header">
+        <h3 class="modal-title">✏️ Edit <span id="bulkEditCount">0</span> Contact(s)</h3>
+        <button class="modal-close" id="closeBulkEditModal">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="bulk-apply-note">
+          ⚠️ Changes below will apply to all <strong id="bulkEditCountNote">0</strong> selected contacts. Fields set to "Keep Current" will not be changed.
+        </div>
+
+        <form id="bulkEditForm">
+          <!-- Segment -->
+          <div class="form-group">
+            <label class="form-label">Segment</label>
+            <select class="form-select" id="bulkSegment">
+              <option value="">— Keep Current —</option>
+              <option value="GOLD_SIP">Gold SIP</option>
+              <option value="GOLD_LOAN">Gold Loan</option>
+              <option value="BOTH">Both (SIP & Loan)</option>
+              <option value="MARKETING">Marketing</option>
+            </select>
+          </div>
+
+          <!-- Payment Schedule Section -->
+          <div class="schedule-section-divider">
+            <div class="schedule-section-title">📅 Payment Schedule</div>
+
+            <!-- SIP Schedule -->
+            <div id="bulkSipScheduleGroup" class="schedule-group">
+              <label class="form-label">SIP Payment Day</label>
+              <div class="bulk-field-option">
+                <select class="bulk-field-action" id="bulkSipAction">
+                  <option value="keep">Keep Current</option>
+                  <option value="set">Set to...</option>
+                  <option value="clear">Clear (remove)</option>
+                </select>
+              </div>
+              <div id="bulkSipDayGroup" style="display: none;">
+                <div class="schedule-row">
+                  <div class="schedule-day-group">
+                    <input type="number" class="schedule-day-input" id="bulkSipPaymentDay"
+                      min="1" max="31" step="1" placeholder="Day (1-31)">
+                  </div>
+                  <div class="schedule-remind-group">
+                    <span class="schedule-remind-label">Remind:</span>
+                    <select class="schedule-remind-select" id="bulkSipReminderDays">
+                      <option value="">Keep Current</option>
+                      <option value="1">1 day</option>
+                      <option value="2">2 days</option>
+                      <option value="3">3 days</option>
+                      <option value="4">4 days</option>
+                      <option value="5">5 days</option>
+                      <option value="6">6 days</option>
+                      <option value="7">7 days</option>
+                      <option value="8">8 days</option>
+                      <option value="9">9 days</option>
+                      <option value="10">10 days</option>
+                      <option value="11">11 days</option>
+                      <option value="12">12 days</option>
+                      <option value="13">13 days</option>
+                      <option value="14">14 days</option>
+                      <option value="15">15 days</option>
+                    </select>
+                    <span class="schedule-remind-label">before</span>
+                  </div>
+                </div>
+                <div class="month-warning" id="bulkSipMonthWarning">⚠️ In shorter months (e.g. February with 28/29 days), the due date will automatically adjust to the last day of that month.</div>
+              </div>
+            </div>
+
+            <!-- Loan Schedule -->
+            <div id="bulkLoanScheduleGroup" class="schedule-group">
+              <label class="form-label">Loan Payment Day</label>
+              <div class="bulk-field-option">
+                <select class="bulk-field-action" id="bulkLoanAction">
+                  <option value="keep">Keep Current</option>
+                  <option value="set">Set to...</option>
+                  <option value="clear">Clear (remove)</option>
+                </select>
+              </div>
+              <div id="bulkLoanDayGroup" style="display: none;">
+                <div class="schedule-row">
+                  <div class="schedule-day-group">
+                    <input type="number" class="schedule-day-input" id="bulkLoanPaymentDay"
+                      min="1" max="31" step="1" placeholder="Day (1-31)">
+                  </div>
+                  <div class="schedule-remind-group">
+                    <span class="schedule-remind-label">Remind:</span>
+                    <select class="schedule-remind-select" id="bulkLoanReminderDays">
+                      <option value="">Keep Current</option>
+                      <option value="1">1 day</option>
+                      <option value="2">2 days</option>
+                      <option value="3">3 days</option>
+                      <option value="4">4 days</option>
+                      <option value="5">5 days</option>
+                      <option value="6">6 days</option>
+                      <option value="7">7 days</option>
+                      <option value="8">8 days</option>
+                      <option value="9">9 days</option>
+                      <option value="10">10 days</option>
+                      <option value="11">11 days</option>
+                      <option value="12">12 days</option>
+                      <option value="13">13 days</option>
+                      <option value="14">14 days</option>
+                      <option value="15">15 days</option>
+                    </select>
+                    <span class="schedule-remind-label">before</span>
+                  </div>
+                </div>
+                <div class="month-warning" id="bulkLoanMonthWarning">⚠️ In shorter months (e.g. February with 28/29 days), the due date will automatically adjust to the last day of that month.</div>
+              </div>
+            </div>
+
+            <div id="bulkNoScheduleNote" class="schedule-group hidden">
+              <div class="form-help">Payment scheduling is not available for Marketing contacts. Existing schedules will be cleared.</div>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelBulkEdit">Cancel</button>
+        <button class="btn btn-primary" id="submitBulkEdit">Apply Changes</button>
       </div>
     </div>
   </div>

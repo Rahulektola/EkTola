@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#dc2626">
+    <title>Deleted Contacts - ekTola Admin</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body class="admin-layout">
+    <!-- Navigation Sidebar -->
+    <div id="admin-nav-container"></div>
+
+    <!-- Main Content -->
+    <main class="admin-main">
+        <header class="admin-header">
+            <div>
+                <h1>🗑️ Deleted Contacts</h1>
+                <p class="subtitle">Manage soft-deleted contacts - restore or permanently purge</p>
+            </div>
+            <div class="header-actions">
+                <button id="btn-purge-old" class="btn btn-admin">Purge Old Records</button>
+                <button id="btn-restore-selected" class="btn btn-primary" disabled>Restore Selected</button>
+            </div>
+        </header>
+
+        <!-- Filters -->
+        <section class="admin-card">
+            <div class="card-body">
+                <div class="filters-row" style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                    <div class="filter-group">
+                        <label for="filter-jeweller">Jeweller</label>
+                        <select id="filter-jeweller" class="form-input" style="min-width: 200px;">
+                            <option value="">All Jewellers</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="filter-days">Deleted Older Than</label>
+                        <select id="filter-days" class="form-input">
+                            <option value="">Any Time</option>
+                            <option value="7">7 days</option>
+                            <option value="14">14 days</option>
+                            <option value="30">30 days</option>
+                            <option value="60">60 days</option>
+                            <option value="90">90 days</option>
+                        </select>
+                    </div>
+                    <button id="btn-apply-filters" class="btn btn-secondary" style="margin-top: 1.5rem;">Apply Filters</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stats -->
+        <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-total">0</div>
+                <div class="stat-label">Total Deleted</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-selected">0</div>
+                <div class="stat-label">Selected for Restore</div>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading-state" class="loading-container" style="display: none;">
+            <div class="loading-spinner"></div>
+            <p>Loading deleted contacts...</p>
+        </div>
+
+        <!-- Error State -->
+        <div id="error-state" class="error-container" style="display: none;">
+            <p class="error-message"></p>
+            <button class="btn btn-primary" onclick="location.reload()">Retry</button>
+        </div>
+
+        <!-- Contacts Table -->
+        <section id="content-container" class="admin-card" style="display: none;">
+            <div class="card-header">
+                <h2>Deleted Contacts</h2>
+                <div class="card-actions">
+                    <label style="font-size: 0.875rem; color: #6b7280;">
+                        <input type="checkbox" id="select-all"> Select All
+                    </label>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="contacts-table"></div>
+                
+                <!-- Pagination -->
+                <div id="pagination" class="pagination" style="margin-top: 1.5rem;"></div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Purge Confirmation Modal -->
+    <div id="purge-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>⚠️ Permanently Purge Contacts</h3>
+                <button class="modal-close" onclick="document.getElementById('purge-modal').style.display='none'">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p><strong>WARNING:</strong> This action is irreversible. Contacts deleted more than the specified number of days ago will be permanently removed from the database, along with all their message history.</p>
+                
+                <div class="form-group">
+                    <label for="purge-days">Purge contacts deleted more than:</label>
+                    <select id="purge-days" class="form-input">
+                        <option value="30">30 days ago</option>
+                        <option value="60">60 days ago</option>
+                        <option value="90">90 days ago</option>
+                        <option value="180">180 days ago</option>
+                        <option value="365">365 days ago</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="purge-jeweller">Limit to Jeweller (optional):</label>
+                    <select id="purge-jeweller" class="form-input">
+                        <option value="">All Jewellers</option>
+                    </select>
+                </div>
+
+                <div id="purge-preview" style="margin-top: 1rem; padding: 1rem; background: #fef3c7; border-radius: 6px; display: none;">
+                    <p style="margin: 0; font-weight: 600;">This will permanently delete <span id="purge-count">0</span> contacts.</p>
+                </div>
+
+                <div id="purge-error" class="form-error"></div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-confirm-purge" class="btn btn-admin">Confirm Purge</button>
+                <button class="btn btn-secondary" onclick="document.getElementById('purge-modal').style.display='none'">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/src/admin/deleted-contacts.ts"></script>
+</body>
+</html>

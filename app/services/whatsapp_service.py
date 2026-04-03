@@ -1,9 +1,10 @@
 """
 WhatsApp Service using PyWa Library (v3.8.0+)
 Handles messaging, template management, and webhook processing
-Uses pywa_async for async support with FastAPI
+Uses pywa for async support with FastAPI
 Now supports multi-tenant: per-jeweller WhatsApp clients + platform client
 """
+import re
 import logging
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
@@ -13,16 +14,12 @@ import httpx
 from sqlalchemy.orm import Session
 
 try:
-    from pywa_async import WhatsApp
-    from pywa_async.types import TemplateLanguage, BodyText, HeaderText
-    from pywa.errors import WhatsAppError
+    from pywa import WhatsApp
     PYWA_AVAILABLE = True
+    WhatsAppError = Exception  # Generic exception for error handling
 except ImportError:
     PYWA_AVAILABLE = False
     WhatsApp = None
-    TemplateLanguage = None
-    BodyText = None
-    HeaderText = None
     WhatsAppError = Exception
 
 from app.config import settings
@@ -60,50 +57,35 @@ class TemplateResult:
     error: Optional[str] = None
 
 
-# Language code to TemplateLanguage mapping for pywa 3.8.0
-LANGUAGE_CODE_MAP = {
-    "en": "ENGLISH",
-    "en_US": "ENGLISH_US",
-    "en_GB": "ENGLISH_UK",
-    "hi": "HINDI",
-    "kn": "KANNADA",
-    "ta": "TAMIL",
-    "te": "TELUGU",
-    "mr": "MARATHI",
-    "gu": "GUJARATI",
-    "bn": "BENGALI",
-    "ml": "MALAYALAM",
-    "pa": "PUNJABI",
-    "or": "ODIA",
-    "as": "ASSAMESE",
-    "ur": "URDU",
-}
-
-
-def get_template_language(language_code: str) -> Optional[Any]:
+def get_template_language(language_code: str) -> str:
     """
-    Convert language code to pywa TemplateLanguage enum
+    Convert language code to WhatsApp language string
     
     Args:
         language_code: ISO language code (en, hi, kn, etc.)
         
     Returns:
-        TemplateLanguage enum value or None
+        Language string (e.g., 'en', 'en_US', 'hi')
     """
-    if not PYWA_AVAILABLE or TemplateLanguage is None:
-        return None
-    
-    # Try direct mapping first
-    lang_name = LANGUAGE_CODE_MAP.get(language_code)
-    if lang_name and hasattr(TemplateLanguage, lang_name):
-        return getattr(TemplateLanguage, lang_name)
-    
-    # Try uppercase version
-    if hasattr(TemplateLanguage, language_code.upper()):
-        return getattr(TemplateLanguage, language_code.upper())
-    
-    # Default to English US
-    return TemplateLanguage.ENGLISH_US
+    # Map to WhatsApp language codes
+    language_map = {
+        "en": "en",
+        "en_US": "en_US",
+        "en_GB": "en_GB",
+        "hi": "hi",
+        "kn": "kn",
+        "ta": "ta",
+        "te": "te",
+        "mr": "mr",
+        "gu": "gu",
+        "bn": "bn",
+        "ml": "ml",
+        "pa": "pa",
+        "or": "or",
+        "as": "as",
+        "ur": "ur",
+    }
+    return language_map.get(language_code, "en")
 
 
 # ==================== MULTI-TENANT CLIENT MANAGEMENT ====================
@@ -301,7 +283,7 @@ class WhatsAppService:
     For jeweller-specific messaging (campaigns), use get_jeweller_whatsapp_client()
     
     Provides messaging, template management, and status tracking
-    Uses pywa_async for async operations
+    Uses pywa for async operations
     """
     
     _instance: Optional['WhatsAppService'] = None
@@ -331,7 +313,7 @@ class WhatsAppService:
             return
         
         try:
-            # pywa 3.8.0 uses pywa_async.WhatsApp for async operations
+            # pywa 3.8.0 WhatsApp client with native async support
             self._client = WhatsApp(
                 phone_id=settings.WHATSAPP_PHONE_NUMBER_ID,
                 token=settings.WHATSAPP_ACCESS_TOKEN,
@@ -382,37 +364,33 @@ class WhatsAppService:
             )
         
         try:
-            # Get the TemplateLanguage enum for pywa 3.8.0
+            # Get the language string for pywa 3.8.0
             template_language = get_template_language(language_code)
             
-            # Build params list for pywa 3.8.0 send_template
-            # In pywa 3.x, we pass params as a list of BaseParams objects
-            params = []
+            # Build components for template parameters
+            # PyWa 3.8.0 uses simple parameter lists
+            components = []
             
-            # Add header params if provided
-            if header_params and HeaderText:
-                # Create a dict for header parameters
-                header_kwargs = {}
-                for i, param in enumerate(header_params):
-                    header_kwargs[f"var{i+1}"] = param
-                if header_kwargs:
-                    params.append(HeaderText.params(**header_kwargs))
+            # Add header component if params provided
+            if header_params:
+                components.append({
+                    "type": "header",
+                    "parameters": [{"type": "text", "text": param} for param in header_params]
+                })
             
-            # Add body params if provided
-            if body_params and BodyText:
-                # Create a dict for body parameters
-                body_kwargs = {}
-                for i, param in enumerate(body_params):
-                    body_kwargs[f"var{i+1}"] = param
-                if body_kwargs:
-                    params.append(BodyText.params(**body_kwargs))
+            # Add body component if params provided
+            if body_params:
+                components.append({
+                    "type": "body",
+                    "parameters": [{"type": "text", "text": param} for param in body_params]
+                })
             
             # Send the template message using pywa 3.8.0 async API
             response = await self._client.send_template(
                 to=phone_number,
-                name=template_name,
+                template=template_name,
                 language=template_language,
-                params=params if params else None,
+                components=components if components else None,
             )
             
             # In pywa 3.x, response is a SentTemplate object with .id attribute
@@ -1058,3 +1036,52 @@ async def send_template_message(
             "error": result.error,
             "error_code": result.error_code,
         }
+
+
+# ==================== PHONE NUMBER UTILITIES ====================
+
+def normalize_phone_number(phone_number: str) -> str:
+    """
+    Normalize phone number to E.164 format
+    Accepts: +919876543210, +91 9876543210, 9876543210
+
+    Args:
+        phone_number: Phone number in various formats
+
+    Returns:
+        str: Phone number in E.164 format (+919876543210)
+    """
+    # Remove all spaces, dashes, and parentheses
+    cleaned = re.sub(r'[\s\-\(\)]', '', phone_number)
+
+    # If it starts with +91, keep as is
+    if cleaned.startswith('+91'):
+        return cleaned
+
+    # If it starts with 91 (without +), add +
+    if cleaned.startswith('91') and len(cleaned) == 12:
+        return '+' + cleaned
+
+    # If it's 10 digits starting with 6-9, assume Indian number
+    if re.match(r'^[6-9]\d{9}$', cleaned):
+        return '+91' + cleaned
+
+    # Return as is if already in other format
+    return cleaned
+
+
+def validate_phone_number(phone_number: str) -> bool:
+    """
+    Validate phone number is in E.164 format
+
+    Args:
+        phone_number: Phone number to validate
+
+    Returns:
+        bool: True if valid E.164 format
+    """
+    # Normalize first
+    normalized = normalize_phone_number(phone_number)
+    # E.164 format: +[country code][number] (max 15 digits)
+    pattern = r'^\+[1-9]\d{1,14}$'
+    return bool(re.match(pattern, normalized))

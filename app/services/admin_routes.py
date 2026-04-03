@@ -3,9 +3,9 @@ Admin Dashboard Router
 Full admin CRUD for jeweller management, contact/campaign management, impersonation
 """
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, Integer, or_
-from typing import Optional
+from typing import Optional, Dict, List
 from datetime import datetime, timedelta
 
 from app.database import get_db
@@ -17,7 +17,7 @@ from app.models.message import Message
 from app.core.dependencies import get_current_admin
 from app.core.security import create_access_token
 from app.utils.enums import ApprovalStatus, MessageStatus, CampaignStatus, SegmentType, Language
-from app.utils.whatsapp import normalize_phone_number, validate_phone_number
+from app.services.whatsapp_service import normalize_phone_number, validate_phone_number
 from app.schemas.admin import (
     JewellerDetailResponse, JewellerListResponse,
     JewellerUpdateRequest, AdminNotesRequest, MetaStatusUpdateRequest,
@@ -27,6 +27,9 @@ from app.schemas.admin import (
     AdminMessageResponse, AdminMessagesPageResponse,
     ImpersonateResponse, JewellerAnalyticsResponse,
     WhatsAppStatusResponse,
+    DeletedContactResponse, DeletedContactsListResponse,
+    ContactPurgeRequest, ContactPurgeResponse,
+    ContactRestoreRequest, ContactRestoreResponse,
 )
 
 import pandas as pd
@@ -36,6 +39,46 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 
 
 # ==================== HELPERS ====================
+
+def _batch_jeweller_aggregates(db: Session, jeweller_ids: List[int]) -> Dict[int, Dict]:
+    """Batch-fetch aggregates for multiple jewellers in 3 queries instead of 4*N."""
+    if not jeweller_ids:
+        return {}
+    
+    result = {jid: {'total_contacts': 0, 'total_campaigns': 0, 'total_messages': 0, 'email': None} for jid in jeweller_ids}
+    
+    # 1. Contact counts per jeweller  
+    contact_counts = db.query(
+        Contact.jeweller_id,
+        func.count(Contact.id).label('cnt')
+    ).filter(
+        Contact.jeweller_id.in_(jeweller_ids),
+        Contact.is_deleted == False
+    ).group_by(Contact.jeweller_id).all()
+    for row in contact_counts:
+        result[row.jeweller_id]['total_contacts'] = row.cnt
+    
+    # 2. Campaign counts per jeweller
+    campaign_counts = db.query(
+        Campaign.jeweller_id,
+        func.count(Campaign.id).label('cnt')
+    ).filter(
+        Campaign.jeweller_id.in_(jeweller_ids)
+    ).group_by(Campaign.jeweller_id).all()
+    for row in campaign_counts:
+        result[row.jeweller_id]['total_campaigns'] = row.cnt
+    
+    # 3. Message counts per jeweller
+    message_counts = db.query(
+        Message.jeweller_id,
+        func.count(Message.id).label('cnt')
+    ).filter(
+        Message.jeweller_id.in_(jeweller_ids)
+    ).group_by(Message.jeweller_id).all()
+    for row in message_counts:
+        result[row.jeweller_id]['total_messages'] = row.cnt
+    
+    return result
 
 def _get_jeweller_or_404(db: Session, jeweller_id: int) -> Jeweller:
     """Fetch jeweller by ID or raise 404"""
@@ -48,24 +91,34 @@ def _get_jeweller_or_404(db: Session, jeweller_id: int) -> Jeweller:
     return jeweller
 
 
-def _build_jeweller_detail(db: Session, jeweller: Jeweller) -> JewellerDetailResponse:
-    """Build full detail response with aggregates"""
-    total_contacts = db.query(func.count(Contact.id)).filter(
-        Contact.jeweller_id == jeweller.id,
-        Contact.is_deleted == False
-    ).scalar() or 0
+def _build_jeweller_detail(db: Session, jeweller: Jeweller, aggregates: Dict = None) -> JewellerDetailResponse:
+    """Build full detail response with aggregates.
+    
+    If `aggregates` dict is provided (from batch query), uses those values
+    instead of making individual queries. Keys: total_contacts, total_campaigns, total_messages, email.
+    """
+    if aggregates:
+        total_contacts = aggregates.get('total_contacts', 0)
+        total_campaigns = aggregates.get('total_campaigns', 0)
+        total_messages = aggregates.get('total_messages', 0)
+        email = aggregates.get('email')
+    else:
+        total_contacts = db.query(func.count(Contact.id)).filter(
+            Contact.jeweller_id == jeweller.id,
+            Contact.is_deleted == False
+        ).scalar() or 0
 
-    total_campaigns = db.query(func.count(Campaign.id)).filter(
-        Campaign.jeweller_id == jeweller.id
-    ).scalar() or 0
+        total_campaigns = db.query(func.count(Campaign.id)).filter(
+            Campaign.jeweller_id == jeweller.id
+        ).scalar() or 0
 
-    total_messages = db.query(func.count(Message.id)).filter(
-        Message.jeweller_id == jeweller.id
-    ).scalar() or 0
+        total_messages = db.query(func.count(Message.id)).filter(
+            Message.jeweller_id == jeweller.id
+        ).scalar() or 0
 
-    # Get user email
-    user = db.query(User).filter(User.id == jeweller.user_id).first()
-    email = user.email if user else None
+        # Get user email
+        user = db.query(User).filter(User.id == jeweller.user_id).first()
+        email = user.email if user else None
     
     # Map is_approved boolean to ApprovalStatus enum
     approval_status = ApprovalStatus.APPROVED if jeweller.is_approved else ApprovalStatus.PENDING
@@ -155,8 +208,21 @@ def list_jewellers(
     total = query.count()
     jewellers = query.offset((page - 1) * page_size).limit(page_size).all()
 
+    # Batch-fetch aggregates for all jewellers on this page (3 queries instead of 4*N)
+    jeweller_ids = [j.id for j in jewellers]
+    aggregates = _batch_jeweller_aggregates(db, jeweller_ids)
+    
+    # Batch-fetch user emails via JOIN
+    user_ids = [j.user_id for j in jewellers]
+    if user_ids:
+        user_emails = db.query(User.id, User.email).filter(User.id.in_(user_ids)).all()
+        email_map = {u.id: u.email for u in user_emails}
+        for j in jewellers:
+            if j.id in aggregates:
+                aggregates[j.id]['email'] = email_map.get(j.user_id)
+
     return JewellerListResponse(
-        jewellers=[_build_jeweller_detail(db, j) for j in jewellers],
+        jewellers=[_build_jeweller_detail(db, j, aggregates.get(j.id)) for j in jewellers],
         total=total,
         page=page,
         page_size=page_size,
@@ -176,8 +242,19 @@ def get_pending_jewellers(
         Jeweller.is_approved == False
     ).order_by(Jeweller.created_at.desc()).all()
 
+    # Batch-fetch aggregates
+    jeweller_ids = [j.id for j in pending]
+    aggregates = _batch_jeweller_aggregates(db, jeweller_ids)
+    user_ids = [j.user_id for j in pending]
+    if user_ids:
+        user_emails = db.query(User.id, User.email).filter(User.id.in_(user_ids)).all()
+        email_map = {u.id: u.email for u in user_emails}
+        for j in pending:
+            if j.id in aggregates:
+                aggregates[j.id]['email'] = email_map.get(j.user_id)
+
     return JewellerListResponse(
-        jewellers=[_build_jeweller_detail(db, j) for j in pending],
+        jewellers=[_build_jeweller_detail(db, j, aggregates.get(j.id)) for j in pending],
         total=len(pending),
         page=1,
         page_size=len(pending),
@@ -1028,4 +1105,158 @@ def get_jeweller_whatsapp_status(
         token_expires_in_days=token_expires_in_days,
         last_token_refresh=jeweller.last_token_refresh,
         fb_app_scoped_user_id=jeweller.fb_app_scoped_user_id,
+    )
+
+
+# ==================== 12. DELETED CONTACTS MANAGEMENT ====================
+
+@router.get("/contacts/deleted", response_model=DeletedContactsListResponse)
+def list_deleted_contacts(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    jeweller_id: Optional[int] = Query(None, description="Filter by jeweller ID"),
+    older_than_days: Optional[int] = Query(None, ge=1, description="Only show contacts deleted more than X days ago"),
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """
+    List all soft-deleted contacts across all jewellers or for a specific jeweller.
+    
+    Use this to review deleted contacts before restoration or permanent purge.
+    
+    **Admin only**
+    """
+    query = db.query(Contact).filter(Contact.is_deleted == True)
+    
+    jeweller_name = None
+    if jeweller_id:
+        jeweller = _get_jeweller_or_404(db, jeweller_id)
+        jeweller_name = jeweller.business_name
+        query = query.filter(Contact.jeweller_id == jeweller_id)
+    
+    if older_than_days:
+        cutoff = datetime.utcnow() - timedelta(days=older_than_days)
+        query = query.filter(Contact.deleted_at <= cutoff)
+    
+    total = query.count()
+    contacts = query.order_by(Contact.deleted_at.desc()).offset(
+        (page - 1) * page_size
+    ).limit(page_size).all()
+    
+    now = datetime.utcnow()
+    contact_responses = []
+    for c in contacts:
+        days_since = (now - c.deleted_at).days if c.deleted_at else 0
+        contact_responses.append(DeletedContactResponse(
+            id=c.id,
+            jeweller_id=c.jeweller_id,
+            phone_number=c.phone_number,
+            name=c.name,
+            customer_id=c.customer_id,
+            segment=c.segment,
+            preferred_language=c.preferred_language,
+            deleted_at=c.deleted_at,
+            days_since_deletion=days_since,
+        ))
+    
+    return DeletedContactsListResponse(
+        contacts=contact_responses,
+        total=total,
+        page=page,
+        page_size=page_size,
+        jeweller_id=jeweller_id,
+        jeweller_name=jeweller_name,
+    )
+
+
+@router.post("/contacts/purge", response_model=ContactPurgeResponse)
+def purge_deleted_contacts(
+    request: ContactPurgeRequest,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """
+    Permanently delete (hard delete) contacts that have been soft-deleted for more than X days.
+    
+    **WARNING**: This action is irreversible. All associated message history will also be deleted.
+    
+    - `older_than_days`: Only purge contacts deleted more than this many days ago (default: 30)
+    - `jeweller_id`: Optionally limit purge to a specific jeweller
+    
+    **Admin only**
+    """
+    cutoff = datetime.utcnow() - timedelta(days=request.older_than_days)
+    
+    query = db.query(Contact).filter(
+        Contact.is_deleted == True,
+        Contact.deleted_at <= cutoff
+    )
+    
+    if request.jeweller_id:
+        # Verify jeweller exists
+        _get_jeweller_or_404(db, request.jeweller_id)
+        query = query.filter(Contact.jeweller_id == request.jeweller_id)
+    
+    # Get count before deletion
+    purge_count = query.count()
+    
+    if purge_count == 0:
+        return ContactPurgeResponse(
+            purged_count=0,
+            message="No contacts found matching purge criteria",
+            jeweller_id=request.jeweller_id,
+            older_than_days=request.older_than_days,
+        )
+    
+    # Permanently delete (cascade will delete messages)
+    query.delete(synchronize_session=False)
+    db.commit()
+    
+    jeweller_msg = f" for jeweller {request.jeweller_id}" if request.jeweller_id else ""
+    return ContactPurgeResponse(
+        purged_count=purge_count,
+        message=f"Permanently deleted {purge_count} contacts{jeweller_msg} (deleted more than {request.older_than_days} days ago)",
+        jeweller_id=request.jeweller_id,
+        older_than_days=request.older_than_days,
+    )
+
+
+@router.post("/contacts/restore", response_model=ContactRestoreResponse)
+def restore_deleted_contacts(
+    request: ContactRestoreRequest,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """
+    Restore soft-deleted contacts by their IDs.
+    
+    Contacts will be restored to active status and visible in dashboards again.
+    
+    **Admin only**
+    """
+    restored_ids = []
+    failed_ids = []
+    
+    for contact_id in request.contact_ids:
+        contact = db.query(Contact).filter(
+            Contact.id == contact_id,
+            Contact.is_deleted == True
+        ).first()
+        
+        if contact:
+            contact.is_deleted = False
+            contact.deleted_at = None
+            contact.updated_at = datetime.utcnow()
+            restored_ids.append(contact_id)
+        else:
+            failed_ids.append(contact_id)
+    
+    db.commit()
+    
+    return ContactRestoreResponse(
+        restored_count=len(restored_ids),
+        failed_count=len(failed_ids),
+        message=f"Restored {len(restored_ids)} contacts" + (f", {len(failed_ids)} not found or already active" if failed_ids else ""),
+        restored_ids=restored_ids,
+        failed_ids=failed_ids,
     )

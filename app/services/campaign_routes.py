@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func
 from typing import List, Optional
 from app.database import get_db
 from app.core.dependencies import get_current_jeweller
@@ -255,38 +256,36 @@ def get_campaign_stats(
     db: Session = Depends(get_db)
 ):
     """Get campaign performance statistics"""
-    campaign = db.query(Campaign).filter(
-        Campaign.id == campaign_id,
-        Campaign.jeweller_id == current_jeweller.id
-    ).first()
-    
-    if not campaign:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Campaign not found"
-        )
-    
-    # Aggregate stats from campaign runs
-    from sqlalchemy import func
-    stats = db.query(
+    # Fetch campaign + aggregate stats in a single combined approach
+    # Query 1: Campaign + aggregated run stats via JOIN
+    result = db.query(
+        Campaign,
         func.count(CampaignRun.id).label('total_runs'),
         func.sum(CampaignRun.messages_sent).label('total_sent'),
         func.sum(CampaignRun.messages_delivered).label('total_delivered'),
         func.sum(CampaignRun.messages_read).label('total_read'),
         func.sum(CampaignRun.messages_failed).label('total_failed'),
         func.max(CampaignRun.completed_at).label('last_run')
-    ).filter(
-        CampaignRun.campaign_id == campaign_id
-    ).first()
+    ).outerjoin(CampaignRun, CampaignRun.campaign_id == Campaign.id).filter(
+        Campaign.id == campaign_id,
+        Campaign.jeweller_id == current_jeweller.id
+    ).group_by(Campaign.id).first()
     
-    total_sent = stats.total_sent or 0
-    total_delivered = stats.total_delivered or 0
-    total_read = stats.total_read or 0
+    if not result or not result[0]:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Campaign not found"
+        )
+    
+    campaign = result[0]
+    total_sent = result.total_sent or 0
+    total_delivered = result.total_delivered or 0
+    total_read = result.total_read or 0
     
     delivery_rate = (total_delivered / total_sent * 100) if total_sent > 0 else 0
     read_rate = (total_read / total_delivered * 100) if total_delivered > 0 else 0
     
-    # Get next scheduled run
+    # Query 2: Get next scheduled run
     next_run = db.query(CampaignRun).filter(
         CampaignRun.campaign_id == campaign_id,
         CampaignRun.status == "PENDING",
@@ -296,7 +295,7 @@ def get_campaign_stats(
     return CampaignStatsResponse(
         campaign_id=campaign.id,
         campaign_name=campaign.name,
-        total_runs=stats.total_runs or 0,
+        total_runs=result.total_runs or 0,
         total_messages_sent=total_sent,
         total_delivered=total_delivered,
         total_read=total_read,

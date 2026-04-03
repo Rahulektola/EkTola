@@ -57,6 +57,13 @@ class MessageStatus(str, Enum):
     FAILED = "FAILED"
 
 
+class MessageType(str, Enum):
+    """Distinguishes the origin / purpose of a message"""
+    CAMPAIGN = "CAMPAIGN"         # Sent as part of a marketing / utility campaign
+    SIP_REMINDER = "SIP_REMINDER" # Gold SIP payment due reminder
+    LOAN_REMINDER = "LOAN_REMINDER"  # Gold Loan payment due reminder
+
+
 class RecurrenceType(str, Enum):
     """Campaign recurrence patterns"""
     DAILY = "DAILY"

@@ -4,6 +4,78 @@ from datetime import datetime, date
 from app.utils.enums import SegmentType, Language
 
 
+# ============ Payment Schedule Schemas ============
+
+class PaymentScheduleUpdate(BaseModel):
+    """Update SIP/Loan payment schedule for a single contact"""
+    sip_payment_day: Optional[int] = Field(None, ge=1, le=31, description="Day of month for SIP payment (1-31). NULL to clear.")
+    loan_payment_day: Optional[int] = Field(None, ge=1, le=31, description="Day of month for Loan payment (1-31). NULL to clear.")
+    sip_reminder_days_before: Optional[int] = Field(None, ge=1, le=15, description="Days before SIP due date to send reminder")
+    loan_reminder_days_before: Optional[int] = Field(None, ge=1, le=15, description="Days before Loan due date to send reminder")
+
+
+class PaymentScheduleClear(BaseModel):
+    """Explicitly clear payment schedule fields"""
+    clear_sip: bool = False
+    clear_loan: bool = False
+
+
+class BulkPaymentScheduleItem(BaseModel):
+    """Single item in a bulk payment schedule update"""
+    contact_id: int
+    sip_payment_day: Optional[int] = Field(None, ge=1, le=31)
+    loan_payment_day: Optional[int] = Field(None, ge=1, le=31)
+    sip_reminder_days_before: Optional[int] = Field(None, ge=1, le=15)
+    loan_reminder_days_before: Optional[int] = Field(None, ge=1, le=15)
+
+
+class BulkPaymentScheduleRequest(BaseModel):
+    """Bulk update payment schedules for multiple contacts"""
+    schedules: List[BulkPaymentScheduleItem] = Field(..., min_items=1, max_items=500)
+
+
+class BulkPaymentScheduleResponse(BaseModel):
+    """Response from bulk payment schedule update"""
+    updated: int
+    failed: int
+    failure_details: List[dict] = Field(default_factory=list)
+    message: str
+
+
+class PaymentScheduleResponse(BaseModel):
+    """Payment schedule info for a contact"""
+    contact_id: int
+    name: Optional[str]
+    phone_number: str
+    segment: SegmentType
+    sip_payment_day: Optional[int]
+    loan_payment_day: Optional[int]
+    sip_reminder_days_before: int
+    loan_reminder_days_before: int
+    last_sip_reminder_sent_at: Optional[datetime]
+    last_loan_reminder_sent_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+class PaymentScheduleListResponse(BaseModel):
+    """Paginated list of contacts with payment schedules"""
+    contacts: List[PaymentScheduleResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+class ReminderPreviewResponse(BaseModel):
+    """Preview of upcoming reminders"""
+    sip_reminders_due_today: int
+    loan_reminders_due_today: int
+    sip_contacts: List[PaymentScheduleResponse]
+    loan_contacts: List[PaymentScheduleResponse]
+
+
 # ============ Dashboard Contact Schemas ============
 
 class DashboardContactCreate(BaseModel):
@@ -94,6 +166,10 @@ class ContactUpdate(BaseModel):
     notes: Optional[str] = None
     tags: Optional[str] = None
     opted_out: Optional[bool] = None
+    sip_payment_day: Optional[int] = Field(None, ge=1, le=31)
+    loan_payment_day: Optional[int] = Field(None, ge=1, le=31)
+    sip_reminder_days_before: Optional[int] = Field(None, ge=1, le=15)
+    loan_reminder_days_before: Optional[int] = Field(None, ge=1, le=15)
 
 
 class ContactResponse(BaseModel):
@@ -106,6 +182,12 @@ class ContactResponse(BaseModel):
     segment: SegmentType
     preferred_language: Language
     opted_out: bool
+    sip_payment_day: Optional[int] = None
+    loan_payment_day: Optional[int] = None
+    sip_reminder_days_before: int = 3
+    loan_reminder_days_before: int = 3
+    last_sip_reminder_sent_at: Optional[datetime] = None
+    last_loan_reminder_sent_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
     
@@ -138,3 +220,23 @@ class ContactBulkDeleteResponse(BaseModel):
     """Bulk delete contacts response"""
     deleted_count: int
     message: str = "Contacts deleted successfully"
+
+
+class BulkContactUpdateRequest(BaseModel):
+    """Bulk update contacts — segment and/or payment schedule for multiple contacts at once"""
+    contact_ids: List[int] = Field(..., min_items=1, max_items=500, description="List of contact IDs to update")
+    segment: Optional[SegmentType] = Field(None, description="New segment for all selected contacts. Omit to keep current.")
+    sip_payment_day: Optional[int] = Field(None, ge=1, le=31, description="SIP payment day. Omit to keep current.")
+    loan_payment_day: Optional[int] = Field(None, ge=1, le=31, description="Loan payment day. Omit to keep current.")
+    sip_reminder_days_before: Optional[int] = Field(None, ge=1, le=15, description="SIP reminder days. Omit to keep current.")
+    loan_reminder_days_before: Optional[int] = Field(None, ge=1, le=15, description="Loan reminder days. Omit to keep current.")
+    clear_sip_schedule: bool = Field(False, description="Set to true to clear SIP payment day for all selected contacts")
+    clear_loan_schedule: bool = Field(False, description="Set to true to clear Loan payment day for all selected contacts")
+
+
+class BulkContactUpdateResponse(BaseModel):
+    """Response from bulk contact update"""
+    updated: int
+    failed: int
+    failure_details: List[dict] = Field(default_factory=list)
+    message: str

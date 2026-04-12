@@ -74,7 +74,7 @@ async def exchange_code_for_token(code: str) -> dict:
         "client_secret": settings.WHATSAPP_APP_SECRET,
         "code": code
     }
-    
+
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get(url, params=params, timeout=30.0)
@@ -99,7 +99,7 @@ async def get_long_lived_token(short_lived_token: str) -> dict:
         "client_secret": settings.WHATSAPP_APP_SECRET,
         "fb_exchange_token": short_lived_token
     }
-    
+
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get(url, params=params, timeout=30.0)
@@ -107,7 +107,6 @@ async def get_long_lived_token(short_lived_token: str) -> dict:
             return response.json()
         except httpx.HTTPError as e:
             logger.error(f"Long-lived token exchange failed: {str(e)}")
-            # If fails, return short-lived token
             return {"access_token": short_lived_token, "expires_in": 3600}
 
 
@@ -120,7 +119,7 @@ async def get_token_info(access_token: str) -> dict:
         "input_token": access_token,
         "access_token": f"{settings.WHATSAPP_APP_ID}|{settings.WHATSAPP_APP_SECRET}"
     }
-    
+
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get(url, params=params, timeout=30.0)
@@ -144,7 +143,7 @@ async def get_waba_details(waba_id: str, access_token: str) -> dict:
         "fields": "id,name,timezone_id,message_template_namespace,account_review_status",
         "access_token": access_token
     }
-    
+
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get(url, params=params, timeout=30.0)
@@ -163,7 +162,7 @@ async def get_phone_numbers(waba_id: str, access_token: str) -> list:
     params = {
         "access_token": access_token
     }
-    
+
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get(url, params=params, timeout=30.0)
@@ -180,7 +179,7 @@ async def subscribe_waba_to_webhook(waba_id: str, access_token: str) -> bool:
     Subscribe WABA to platform webhooks.
     """
     url = f"https://graph.facebook.com/{settings.WHATSAPP_API_VERSION}/{waba_id}/subscribed_apps"
-    
+
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(
@@ -205,7 +204,6 @@ async def notify_admin_whatsapp_connected(jeweller_id: int, db: Session):
         await send_admin_notification(jeweller_id, "whatsapp_connected", db)
     except Exception as e:
         logger.error(f"Failed to send admin notification: {str(e)}")
-        # Don't fail the main flow if notification fails
 
 
 # ============ API Endpoints ============
@@ -218,30 +216,24 @@ async def get_embedded_signup_config(
     """
     Get Facebook SDK configuration for Embedded Signup.
     Returns app credentials and signed state token.
-    
+
     **Requirements:**
     - User must be a jeweller (not admin)
     - Jeweller must be approved
     """
-    # Verify user is a jeweller
     jeweller = db.query(Jeweller).filter(Jeweller.user_id == current_user.id).first()
     if not jeweller:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only jewellers can connect WhatsApp"
         )
-    
-    # Check if already connected
+
     if jeweller.waba_id and jeweller.access_token:
         logger.warning(f"Jeweller {jeweller.id} already has WhatsApp connected")
-        # Allow reconnection - they might want to switch accounts
-    
-    # Generate state token
+
     state_token = generate_state_token(jeweller.id, current_user.id)
-    
-    # Build redirect URI
     callback_url = f"{settings.WHATSAPP_CALLBACK_BASE_URL}/auth/whatsapp/callback"
-    
+
     return WhatsAppConfigResponse(
         appId=settings.WHATSAPP_APP_ID,
         configId=settings.FACEBOOK_CONFIG_ID,
@@ -258,7 +250,7 @@ async def embedded_signup_callback(
     """
     Handle callback from Facebook Embedded Signup.
     Exchanges authorization code for access token and stores credentials.
-    
+
     **Process:**
     1. Validate state token
     2. Exchange code for access token
@@ -268,41 +260,38 @@ async def embedded_signup_callback(
     6. Subscribe to webhooks
     7. Notify admins
     """
-    # Validate state token
     state_payload = validate_state_token(request.state)
     jeweller_id = state_payload.get("jeweller_id")
-    
-    # Get jeweller
+
     jeweller = db.query(Jeweller).filter(Jeweller.id == jeweller_id).first()
     if not jeweller:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Jeweller not found"
         )
-    
+
     try:
         # Step 1: Exchange code for short-lived token
         logger.info(f"Exchanging code for token - Jeweller ID: {jeweller_id}")
         token_data = await exchange_code_for_token(request.code)
         short_lived_token = token_data.get("access_token")
-        
+
         if not short_lived_token:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to get access token from Facebook"
             )
-        
+
         # Step 2: Get long-lived token
         logger.info(f"Exchanging for long-lived token - Jeweller ID: {jeweller_id}")
         long_lived_data = await get_long_lived_token(short_lived_token)
         access_token = long_lived_data.get("access_token", short_lived_token)
-        expires_in = long_lived_data.get("expires_in", 3600)  # Default 1 hour
-        
+        expires_in = long_lived_data.get("expires_in", 3600)
+
         # Step 3: Debug token to get user ID and WABA ID
         logger.info(f"Getting token info - Jeweller ID: {jeweller_id}")
         token_info = await get_token_info(access_token)
-        
-        # Extract granular_scopes to find WABA ID
+
         waba_id = None
         granular_scopes = token_info.get("granular_scopes", [])
         for scope in granular_scopes:
@@ -311,62 +300,48 @@ async def embedded_signup_callback(
                 if target_ids:
                     waba_id = target_ids[0]
                     break
-        
+
         if not waba_id:
-            # Fallback: Try to get from token_info directly
-            waba_id = token_info.get("app_id")  # Sometimes it's here
-        
+            waba_id = token_info.get("app_id")
+
         if not waba_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Could not determine WhatsApp Business Account ID from token"
             )
-        
+
         fb_user_id = token_info.get("user_id", "")
-        
+
         # Step 4: Get WABA details
         logger.info(f"Fetching WABA details - Jeweller ID: {jeweller_id}, WABA ID: {waba_id}")
         waba_details = await get_waba_details(waba_id, access_token)
         waba_name = waba_details.get("name", jeweller.business_name)
         verification_status = waba_details.get("account_review_status", "pending")
-        
+
         # Step 5: Get phone numbers
         logger.info(f"Fetching phone numbers - Jeweller ID: {jeweller_id}, WABA ID: {waba_id}")
         phone_numbers = await get_phone_numbers(waba_id, access_token)
-        
+
         phone_number_id = None
         phone_display_number = None
-        
+
         if phone_numbers:
-            # Use first verified phone number, or first available
-            primary_phone = None
-            for phone in phone_numbers:
-                if phone.get("verified_name"):
-                    primary_phone = phone
-                    break
-            
-            if not primary_phone and phone_numbers:
-                primary_phone = phone_numbers[0]
-            
-            if primary_phone:
-                phone_number_id = primary_phone.get("id")
-                phone_display_number = primary_phone.get("display_phone_number")
-        
+            primary_phone = next(
+                (phone for phone in phone_numbers if phone.get("verified_name")),
+                phone_numbers[0]
+            )
+            phone_number_id = primary_phone.get("id")
+            phone_display_number = primary_phone.get("display_phone_number")
+
         if not phone_number_id:
             logger.warning(f"No phone numbers found for WABA {waba_id}")
-            # Continue anyway - they might add phone later
-        
+
         # Step 6: Encrypt and store credentials
         logger.info(f"Encrypting and storing credentials - Jeweller ID: {jeweller_id}")
         encrypted_token = encrypt_token(access_token)
-        
-        # Generate unique webhook verify token
         webhook_verify_token = secrets.token_urlsafe(32)
-        
-        # Calculate expiry
         token_expires_at = now_utc() + timedelta(seconds=expires_in)
-        
-        # Update jeweller record
+
         jeweller.fb_app_scoped_user_id = fb_user_id
         jeweller.waba_id = waba_id
         jeweller.waba_name = waba_name
@@ -378,27 +353,27 @@ async def embedded_signup_callback(
         jeweller.business_verification_status = verification_status
         jeweller.whatsapp_connected_at = now_utc()
         jeweller.updated_at = now_utc()
-        
+
         db.commit()
         db.refresh(jeweller)
-        
+
         # Step 7: Subscribe WABA to webhooks
         logger.info(f"Subscribing to webhooks - Jeweller ID: {jeweller_id}, WABA ID: {waba_id}")
         await subscribe_waba_to_webhook(waba_id, access_token)
-        
+
         # Step 8: Notify admins
         logger.info(f"Notifying admins - Jeweller ID: {jeweller_id}")
         await notify_admin_whatsapp_connected(jeweller_id, db)
-        
+
         logger.info(f"WhatsApp connected successfully - Jeweller ID: {jeweller_id}, WABA ID: {waba_id}")
-        
+
         return WhatsAppCallbackResponse(
             success=True,
             waba_id=waba_id,
             phone_display_number=phone_display_number,
             business_name=waba_name
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -419,25 +394,21 @@ async def disconnect_whatsapp(
     Disconnect jeweller's WhatsApp Business Account.
     Removes all credentials and connection data.
     """
-    # Get jeweller
     jeweller = db.query(Jeweller).filter(Jeweller.user_id == current_user.id).first()
     if not jeweller:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only jewellers can disconnect WhatsApp"
         )
-    
-    # Check if connected
+
     if not jeweller.waba_id:
         return WhatsAppDisconnectResponse(
             success=True,
             message="WhatsApp was not connected"
         )
-    
-    # Log disconnection
+
     logger.info(f"Disconnecting WhatsApp - Jeweller ID: {jeweller.id}, WABA ID: {jeweller.waba_id}")
-    
-    # Clear all WhatsApp fields
+
     jeweller.fb_app_scoped_user_id = None
     jeweller.waba_id = None
     jeweller.waba_name = None
@@ -450,11 +421,11 @@ async def disconnect_whatsapp(
     jeweller.whatsapp_connected_at = None
     jeweller.last_token_refresh = None
     jeweller.updated_at = now_utc()
-    
+
     db.commit()
-    
+
     logger.info(f"WhatsApp disconnected successfully - Jeweller ID: {jeweller.id}")
-    
+
     return WhatsAppDisconnectResponse(
         success=True,
         message="WhatsApp Business Account disconnected successfully"

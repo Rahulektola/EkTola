@@ -4,6 +4,7 @@ from sqlalchemy import func, Integer
 from typing import List, Optional
 from app.database import get_db
 from app.core.dependencies import get_current_jeweller
+from app.core.datetime_utils import now_utc
 from app.models.jeweller import Jeweller
 from app.models.contact import Contact
 from app.schemas.contact import (
@@ -66,7 +67,7 @@ def add_one_contact(
         existing.segment = SegmentType.merge(existing.segment, segment)
         existing.name = request.name or existing.name
         existing.notes = f"Purpose: {request.purpose}, Date: {request.date}"
-        existing.updated_at = datetime.utcnow()
+        existing.updated_at = now_utc()
         if existing.is_deleted:
             existing.is_deleted = False
             existing.deleted_at = None
@@ -229,7 +230,7 @@ async def bulk_upload_dashboard(
                 existing.segment = SegmentType.merge(existing.segment, entry['segment'])
                 existing.name = entry['name'] or existing.name
                 existing.notes = entry['notes']
-                existing.updated_at = datetime.utcnow()
+                existing.updated_at = now_utc()
                 if existing.is_deleted:
                     existing.is_deleted = False
                     existing.deleted_at = None
@@ -360,7 +361,7 @@ async def upload_contacts(
                 existing.customer_id = row.get('customer_id')
                 existing.notes = row.get('notes')
                 existing.tags = row.get('tags')
-                existing.updated_at = datetime.utcnow()
+                existing.updated_at = now_utc()
                 updated += 1
             else:
                 # Create new contact
@@ -523,7 +524,7 @@ def bulk_delete_contacts(
             detail="No matching contacts found to delete"
         )
 
-    now = datetime.utcnow()
+    now = now_utc()
     for contact in contacts:
         contact.is_deleted = True
         contact.deleted_at = now
@@ -611,7 +612,7 @@ def bulk_update_contacts(
                 if can_loan:
                     contact.loan_reminder_days_before = request.loan_reminder_days_before
 
-            contact.updated_at = datetime.utcnow()
+            contact.updated_at = now_utc()
             updated += 1
 
         except Exception as e:
@@ -713,7 +714,7 @@ def delete_contact(
         )
     
     contact.is_deleted = True
-    contact.deleted_at = datetime.utcnow()
+    contact.deleted_at = now_utc()
     db.commit()
     
     return None
@@ -768,7 +769,7 @@ def update_payment_schedule(
     for field, value in update_data.items():
         setattr(contact, field, value)
 
-    contact.updated_at = datetime.utcnow()
+    contact.updated_at = now_utc()
     db.commit()
     db.refresh(contact)
 
@@ -805,7 +806,7 @@ def clear_payment_schedule(
         contact.loan_payment_day = None
         contact.last_loan_reminder_sent_at = None
 
-    contact.updated_at = datetime.utcnow()
+    contact.updated_at = now_utc()
     db.commit()
     db.refresh(contact)
 
@@ -851,7 +852,7 @@ def bulk_update_payment_schedule(
             for field, value in data.items():
                 setattr(contact, field, value)
 
-            contact.updated_at = datetime.utcnow()
+            contact.updated_at = now_utc()
             updated += 1
 
         except Exception as e:
@@ -962,7 +963,7 @@ def preview_upcoming_reminders(
     from datetime import timedelta
     import calendar
 
-    now = datetime.utcnow() + timedelta(hours=5, minutes=30)  # IST
+    now = now_utc() + timedelta(hours=5, minutes=30)  # IST
     today = now.date()
 
     def _contacts_due_for(reminder_type: str):

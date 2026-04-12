@@ -9,6 +9,7 @@ from app.schemas.auth import (
 from app.config import settings
 from app.models.user import User
 from app.models.jeweller import Jeweller
+from app.core.datetime_utils import now_utc
 from app.core.security import verify_password, get_password_hash, create_access_token, create_refresh_token
 from app.core.dependencies import get_current_user, create_token_data
 from app.services.whatsapp_service import send_whatsapp_otp, validate_phone_number, normalize_phone_number
@@ -222,7 +223,7 @@ def request_otp(
     
     # Generate 6-digit OTP
     otp_code = str(secrets.randbelow(900000) + 100000)
-    otp_expiry = datetime.utcnow() + timedelta(minutes=5)
+    otp_expiry = now_utc() + timedelta(minutes=5)
     
     user.phone_otp_code = otp_code
     user.phone_otp_expiry = otp_expiry
@@ -259,7 +260,7 @@ async def request_phone_otp(
     
     # Generate 6-digit OTP
     otp_code = str(secrets.randbelow(900000) + 100000)
-    otp_expiry = datetime.utcnow() + timedelta(minutes=10)
+    otp_expiry = now_utc() + timedelta(minutes=10)
     
     # Send OTP via WhatsApp
     result = await send_whatsapp_otp(normalized_phone, otp_code)
@@ -307,7 +308,7 @@ def verify_otp(
         )
     
     # Check expiry FIRST before validating the code
-    if user.phone_otp_expiry < datetime.utcnow():
+    if user.phone_otp_expiry < now_utc():
         # Clear expired OTP
         user.phone_otp_code = None
         user.phone_otp_expiry = None
@@ -371,7 +372,7 @@ def verify_phone_otp(
         )
     
     # Check expiry FIRST before validating the code
-    if user.phone_otp_expiry < datetime.utcnow():
+    if user.phone_otp_expiry < now_utc():
         # Clear expired OTP
         user.phone_otp_code = None
         user.phone_otp_expiry = None

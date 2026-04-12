@@ -5,6 +5,7 @@ from typing import List
 from datetime import datetime, timedelta
 from app.database import get_db
 from app.core.dependencies import get_current_jeweller, get_current_admin
+from app.core.datetime_utils import now_utc
 from app.models.jeweller import Jeweller
 from app.models.contact import Contact
 from app.models.campaign import Campaign, CampaignRun
@@ -54,7 +55,7 @@ def get_jeweller_dashboard(
     ).scalar()
     
     # Last 30 days stats
-    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    thirty_days_ago = now_utc() - timedelta(days=30)
     recent_stats = db.query(
         func.count(Message.id).label('total'),
         func.sum(func.cast(Message.status == MessageStatus.DELIVERED, Integer)).label('delivered'),
@@ -154,7 +155,7 @@ def get_admin_dashboard(
     total_messages = db.execute(text("SELECT COUNT(*) FROM messages")).scalar() or 0
     
     # Messages last 30 days
-    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    thirty_days_ago = now_utc() - timedelta(days=30)
     messages_30d = db.execute(text("SELECT COUNT(*) FROM messages WHERE created_at >= :date"), {"date": thirty_days_ago}).scalar() or 0
     
     # Overall delivery and read rates - use raw SQL to avoid model column issues
@@ -241,7 +242,7 @@ def get_admin_detailed_analytics(
     db: Session = Depends(get_db)
 ):
     """Get detailed admin analytics with breakdowns"""
-    start_date = datetime.utcnow() - timedelta(days=days)
+    start_date = now_utc() - timedelta(days=days)
     
     # Total messages in period
     total_messages = db.query(func.count(Message.id)).filter(

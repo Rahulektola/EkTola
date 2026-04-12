@@ -4,6 +4,7 @@ from sqlalchemy import func
 from typing import List, Optional
 from app.database import get_db
 from app.core.dependencies import get_current_jeweller
+from app.core.datetime_utils import now_utc
 from app.models.jeweller import Jeweller
 from app.models.campaign import Campaign, CampaignRun
 from app.schemas.campaign import (
@@ -119,7 +120,7 @@ def update_campaign(
     for field, value in update_data.items():
         setattr(campaign, field, value)
     
-    campaign.updated_at = datetime.utcnow()
+    campaign.updated_at = now_utc()
     db.commit()
     db.refresh(campaign)
     
@@ -151,7 +152,7 @@ def pause_campaign(
         )
     
     campaign.status = CampaignStatus.PAUSED
-    campaign.updated_at = datetime.utcnow()
+    campaign.updated_at = now_utc()
     db.commit()
     db.refresh(campaign)
     
@@ -215,7 +216,7 @@ def activate_campaign(
         )
     
     campaign.status = CampaignStatus.ACTIVE
-    campaign.updated_at = datetime.utcnow()
+    campaign.updated_at = now_utc()
     db.commit()
     db.refresh(campaign)
     
@@ -289,7 +290,7 @@ def get_campaign_stats(
     next_run = db.query(CampaignRun).filter(
         CampaignRun.campaign_id == campaign_id,
         CampaignRun.status == "PENDING",
-        CampaignRun.scheduled_at > datetime.utcnow()
+        CampaignRun.scheduled_at > now_utc()
     ).order_by(CampaignRun.scheduled_at).first()
     
     return CampaignStatsResponse(

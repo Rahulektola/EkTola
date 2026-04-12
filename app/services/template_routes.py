@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.database import get_db
 from app.core.dependencies import get_current_admin, get_current_jeweller
+from app.core.datetime_utils import now_utc, utc_now
 from app.models.jeweller import Jeweller
 from app.models.template import Template, TemplateTranslation
 from app.schemas.template import (
@@ -145,7 +146,7 @@ def update_template_admin(
     for field, value in update_data.items():
         setattr(template, field, value)
     
-    template.updated_at = datetime.utcnow()
+    template.updated_at = now_utc()
     db.commit()
     db.refresh(template)
     
@@ -168,7 +169,7 @@ def delete_template_admin(
         )
     
     template.is_active = False
-    template.updated_at = datetime.utcnow()
+    template.updated_at = now_utc()
     db.commit()
     
     return None

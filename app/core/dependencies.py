@@ -109,7 +109,7 @@ def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
-def create_token_data(user: User, jeweller: Jeweller = None) -> dict:
+def create_token_data(user: User, jeweller: Jeweller | None = None) -> dict:
     """Create token payload data"""
     return {
         "user_id": user.id,

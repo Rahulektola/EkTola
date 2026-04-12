@@ -2,297 +2,345 @@
 Celery Tasks for Campaign Execution
 Background jobs for sending WhatsApp messages
 """
+import ast
 import asyncio
 import logging
-from datetime import datetime, timedelta
-from typing import List
-from sqlalchemy.orm import Session, joinedload
+from datetime import timedelta
+from sqlalchemy.orm import joinedload
 
 from app.celery_app import celery_app
-from app.database import SessionLocal
+from app.core.datetime_utils import now_utc
 from app.models.campaign import Campaign, CampaignRun
 from app.models.message import Message
 from app.models.contact import Contact
 from app.models.template import Template
-from app.utils.enums import CampaignStatus, MessageStatus, CampaignType, RecurrenceType
+from app.utils.enums import CampaignStatus, MessageStatus, MessageType, Language, RecurrenceType
+from app.services.template_service import TemplateService
 from app.services.whatsapp_service import whatsapp_service
 from app.services.base_task import DatabaseTask
 
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Tasks
+# ---------------------------------------------------------------------------
+
+@celery_app.task(bind=True, base=DatabaseTask, name='app.services.campaign_tasks.check_pending_campaigns')
+def check_pending_campaigns(self):
+    """
+    Periodic task: Check for campaigns that should be executed now.
+    Runs every minute via Celery Beat.
+    """
+    db = self.db
+
+    try:
+        now = now_utc()
+        campaigns = _get_active_campaigns(db, now)
+
+        if not campaigns:
+            logger.debug("No pending campaigns found")
+            return
+
+        logger.info(f"🔍 Checking {len(campaigns)} active campaigns")
+
+        for campaign in campaigns:
+            if _should_campaign_run(db, campaign, now):
+                _schedule_campaign_run(db, campaign, now)
+
+        logger.info("✅ Campaign check completed")
+
+    except Exception as e:
+        logger.error(f"❌ Error checking pending campaigns: {str(e)}")
+        raise
+
+
 @celery_app.task(bind=True, base=DatabaseTask, name='app.services.campaign_tasks.execute_campaign_run')
 def execute_campaign_run(self, campaign_run_id: int):
     """
-    Execute a campaign run - send messages to all target contacts
-    
+    Execute a campaign run - send messages to all target contacts.
+
     Args:
         campaign_run_id: ID of the campaign run to execute
     """
     db = self.db
-    
+    campaign_run = None
+
     try:
-        # Get campaign run with campaign eagerly loaded (1 query instead of 2)
-        campaign_run = db.query(CampaignRun).options(
-            joinedload(CampaignRun.campaign)
-        ).filter(
-            CampaignRun.id == campaign_run_id
-        ).first()
-        
-        if not campaign_run:
-            logger.error(f"❌ Campaign run {campaign_run_id} not found")
+        campaign_run, campaign = _load_campaign_run(db, campaign_run_id)
+        if not campaign_run or not campaign:
             return
-        
-        campaign = campaign_run.campaign  # No extra query — already loaded via JOIN
-        
-        if not campaign:
-            logger.error(f"❌ Campaign {campaign_run.campaign_id} not found")
-            return
-        
-        logger.info(f"🚀 Starting campaign run {campaign_run_id} for campaign '{campaign.name}'")
-        
-        # Update run status
-        campaign_run.status = CampaignStatus.RUNNING
-        campaign_run.started_at = datetime.utcnow()
-        db.commit()
-        
-        # Get target contacts based on segment
-        query = db.query(Contact).filter(
-            Contact.jeweller_id == campaign.jeweller_id,
-            Contact.is_deleted == False
-        )
-        
-        if campaign.target_segment:
-            query = query.filter(Contact.segment == campaign.target_segment)
-        
-        contacts = query.all()
-        
+
+        _mark_run_as_running(db, campaign_run)
+
+        contacts = _get_target_contacts(db, campaign)
         if not contacts:
-            logger.warning(f"⚠️ No contacts found for campaign {campaign.id}")
-            campaign_run.status = CampaignStatus.COMPLETED
-            campaign_run.completed_at = datetime.utcnow()
-            campaign_run.total_sent = 0
-            db.commit()
+            _complete_run_with_no_contacts(db, campaign_run, campaign)
             return
-        
-        logger.info(f"📋 Found {len(contacts)} contacts to message")
-        
-        # Create message records in batch and queue sending tasks
-        sent_count = 0
-        failed_count = 0
-        messages = []
-        
-        for contact in contacts:
-            # Create message record
-            message = Message(
-                campaign_id=campaign.id,
-                contact_id=contact.id,
-                jeweller_id=campaign.jeweller_id,
-                template_id=campaign.template_id,
-                phone_number=contact.phone_number,
-                status=MessageStatus.PENDING,
-                scheduled_at=datetime.utcnow()
-            )
-            db.add(message)
-            messages.append(message)
-            sent_count += 1
-        
-        # Single batch commit for all messages instead of per-message commit
-        db.commit()
-        
-        # Queue message sending tasks after commit (so IDs are available)
-        for message in messages:
-            send_campaign_message.delay(message.id)
-        
-        # Update campaign run statistics
-        campaign_run.total_sent = sent_count
-        campaign_run.total_failed = failed_count
-        campaign_run.status = CampaignStatus.COMPLETED
-        campaign_run.completed_at = datetime.utcnow()
-        db.commit()
-        
-        logger.info(f"✅ Campaign run {campaign_run_id} completed: {sent_count} queued, {failed_count} failed")
-        
+
+        template = _load_template(db, campaign)
+        if not template:
+            _mark_run_as_failed(db, campaign_run)
+            return
+
+        messages = _build_messages(db, contacts, campaign, campaign_run, template)
+        _dispatch_messages(messages)
+        _complete_run(db, campaign_run, contacts, messages)
+
+        logger.info(f"✅ Campaign run {campaign_run_id} completed: {len(messages)} queued")
+
     except Exception as e:
         logger.error(f"❌ Error executing campaign run {campaign_run_id}: {str(e)}")
-        
-        # Mark campaign run as failed
-        if campaign_run:
-            campaign_run.status = CampaignStatus.FAILED
-            campaign_run.completed_at = datetime.utcnow()
-            db.commit()
-        
+        _mark_run_as_failed(db, campaign_run)
         raise
 
 
 @celery_app.task(bind=True, base=DatabaseTask, name='app.services.campaign_tasks.send_campaign_message')
 def send_campaign_message(self, message_id: int):
     """
-    Send a single campaign message via WhatsApp
-    
+    Send a single campaign message via WhatsApp.
+
     Args:
         message_id: ID of the message to send
     """
     db = self.db
-    
+    message = None
+
     try:
-        # Get message with related data eagerly loaded (1 query instead of 4)
         message = db.query(Message).filter(Message.id == message_id).first()
-        
+
         if not message:
             logger.error(f"❌ Message {message_id} not found")
             return
-        
-        # Get related data in a single query via JOIN
+
         related = db.query(Campaign, Contact, Template).filter(
             Campaign.id == message.campaign_id,
             Contact.id == message.contact_id,
-            Template.id == message.template_id
+            Template.id == Campaign.template_id
         ).first()
-        
+
         if not related:
             logger.error(f"❌ Missing data for message {message_id}")
             message.status = MessageStatus.FAILED
-            message.error_message = "Missing campaign, contact, or template data"
+            message.failure_reason = "Missing campaign, contact, or template data"
+            message.updated_at = now_utc()
             db.commit()
             return
-        
-        campaign, contact, template = related
-        
-        # Update message status
-        message.status = MessageStatus.SENDING
-        db.commit()
-        
-        # Send message via WhatsApp
+
+        _, contact, template = related 
+
         result = asyncio.run(
-            whatsapp_service.send_campaign_message(
-                contact=contact,
-                template=template,
-                language=campaign.language,
-                custom_variables=None,  # Auto-map from contact
-                db=db
+            whatsapp_service.send_template_message(
+                phone_number=contact.phone_number,
+                template_name=template.template_name,
+                language_code=(contact.preferred_language or Language.ENGLISH).value,
+                body_params=message.message_body,
             )
         )
-        
-        if result.get("success"):
-            # Message sent successfully
+
+        if result.success:
             message.status = MessageStatus.SENT
-            message.whatsapp_message_id = result.get("message_id")
-            message.sent_at = datetime.utcnow()
+            message.whatsapp_message_id = result.message_id
+            message.sent_at = now_utc()
+            message.updated_at = now_utc()
             logger.info(f"✅ Message {message_id} sent to {contact.phone_number}")
         else:
-            # Message failed
             message.status = MessageStatus.FAILED
-            message.error_message = result.get("error", "Unknown error")
-            logger.error(f"❌ Message {message_id} failed: {message.error_message}")
-        
+            message.failure_reason = result.error or "Unknown error"
+            message.updated_at = now_utc()
+            logger.error(f"❌ Message {message_id} failed: {message.failure_reason}")
+
         db.commit()
-        
+
     except Exception as e:
         logger.error(f"❌ Error sending message {message_id}: {str(e)}")
-        
-        # Mark message as failed
-        if message:
-            message.status = MessageStatus.FAILED
-            message.error_message = str(e)
-            db.commit()
-        
-        # Retry logic
         raise self.retry(exc=e, countdown=60, max_retries=3)
 
 
-@celery_app.task(bind=True, base=DatabaseTask, name='app.services.campaign_tasks.check_pending_campaigns')
-def check_pending_campaigns(self):
-    """
-    Periodic task: Check for campaigns that should be executed now
-    Runs every minute via Celery Beat
-    """
-    db = self.db
-    
+# ---------------------------------------------------------------------------
+# check_pending_campaigns helpers
+# ---------------------------------------------------------------------------
+
+def _get_active_campaigns(db, now):
+    return db.query(Campaign).filter(
+        Campaign.status == CampaignStatus.ACTIVE,
+        Campaign.start_date <= now.date()
+    ).all()
+
+
+def _should_campaign_run(db, campaign, now) -> bool:
+    checkers = {
+        RecurrenceType.ONE_TIME: _should_run_one_time,
+        RecurrenceType.DAILY:    _should_run_daily,
+        RecurrenceType.WEEKLY:   _should_run_weekly,
+        RecurrenceType.MONTHLY:  _should_run_monthly,
+    }
+    checker = checkers.get(campaign.recurrence_type)
+    return checker(db, campaign, now) if checker else False
+
+
+def _has_existing_run(db, campaign_id, since=None) -> bool:
+    query = db.query(CampaignRun).filter(CampaignRun.campaign_id == campaign_id)
+    if since:
+        query = query.filter(CampaignRun.scheduled_at >= since)
+    return query.first() is not None
+
+
+def _should_run_one_time(db, campaign, now) -> bool:
+    return campaign.start_date <= now.date() and not _has_existing_run(db, campaign.id)
+
+
+def _should_run_daily(db, campaign, now) -> bool:
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return not _has_existing_run(db, campaign.id, since=today_start)
+
+
+def _should_run_weekly(db, campaign, now) -> bool:
+    week_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    return not _has_existing_run(db, campaign.id, since=week_start)
+
+
+def _should_run_monthly(db, campaign, now) -> bool:
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return not _has_existing_run(db, campaign.id, since=month_start)
+
+
+def _schedule_campaign_run(db, campaign, now):
+    logger.info(f"📅 Scheduling campaign run for '{campaign.name}' (ID: {campaign.id})")
+    campaign_run = CampaignRun(
+        campaign_id=campaign.id,
+        jeweller_id=campaign.jeweller_id,
+        scheduled_at=now,
+        status="PENDING"
+    )
+    db.add(campaign_run)
+    db.commit()
+    db.refresh(campaign_run)
+    execute_campaign_run.delay(campaign_run.id)
+
+
+# ---------------------------------------------------------------------------
+# execute_campaign_run helpers
+# ---------------------------------------------------------------------------
+
+def _load_campaign_run(db, campaign_run_id):
+    campaign_run = db.query(CampaignRun).options(
+        joinedload(CampaignRun.campaign)
+    ).filter(CampaignRun.id == campaign_run_id).first()
+
+    if not campaign_run:
+        logger.error(f"❌ Campaign run {campaign_run_id} not found")
+        return None, None
+
+    campaign = campaign_run.campaign
+    if not campaign:
+        logger.error(f"❌ Campaign {campaign_run.campaign_id} not found")
+        return campaign_run, None
+
+    logger.info(f"🚀 Starting campaign run {campaign_run_id} for campaign '{campaign.name}'")
+    return campaign_run, campaign
+
+
+def _mark_run_as_running(db, campaign_run):
+    campaign_run.status = "RUNNING"
+    campaign_run.started_at = now_utc()
+    db.commit()
+
+
+def _mark_run_as_failed(db, campaign_run):
+    if campaign_run:
+        campaign_run.status = "FAILED"
+        campaign_run.completed_at = now_utc()
+        db.commit()
+
+
+def _get_target_contacts(db, campaign):
+    query = db.query(Contact).filter(
+        Contact.jeweller_id == campaign.jeweller_id,
+        Contact.is_deleted == False
+    )
+    if campaign.sub_segment:
+        query = query.filter(Contact.segment == campaign.sub_segment)
+    return query.all()
+
+
+def _complete_run_with_no_contacts(db, campaign_run, campaign):
+    logger.warning(f"⚠️ No contacts found for campaign {campaign.id}")
+    campaign_run.status = "COMPLETED"
+    campaign_run.completed_at = now_utc()
+    campaign_run.total_contacts = 0
+    campaign_run.eligible_contacts = 0
+    campaign_run.messages_queued = 0
+    campaign_run.messages_failed = 0
+    db.commit()
+
+
+def _load_template(db, campaign):
+    template = db.query(Template).filter(Template.id == campaign.template_id).first()
+    if not template:
+        logger.error(f"❌ Template {campaign.template_id} not found for campaign {campaign.id}")
+    return template
+
+
+def _resolve_variables(campaign, contact) -> dict:
+    if not campaign.variable_mapping:
+        return {}
     try:
-        now = datetime.utcnow()
-        
-        # Find active campaigns that are due for execution
-        campaigns = db.query(Campaign).filter(
-            Campaign.status == CampaignStatus.ACTIVE,
-            Campaign.start_date <= now
-        ).all()
-        
-        if not campaigns:
-            logger.debug("No pending campaigns found")
-            return
-        
-        logger.info(f"🔍 Checking {len(campaigns)} active campaigns")
-        
-        for campaign in campaigns:
-            # Check if campaign should run now
-            should_run = False
-            
-            # One-time campaigns
-            if campaign.recurrence_type == RecurrenceType.ONCE:
-                # Check if already executed
-                existing_run = db.query(CampaignRun).filter(
-                    CampaignRun.campaign_id == campaign.id
-                ).first()
-                
-                if not existing_run and campaign.start_date <= now:
-                    should_run = True
-            
-            # Daily recurring campaigns
-            elif campaign.recurrence_type == RecurrenceType.DAILY:
-                # Check if already ran today
-                today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-                today_run = db.query(CampaignRun).filter(
-                    CampaignRun.campaign_id == campaign.id,
-                    CampaignRun.scheduled_at >= today_start
-                ).first()
-                
-                if not today_run:
-                    should_run = True
-            
-            # Weekly recurring campaigns
-            elif campaign.recurrence_type == RecurrenceType.WEEKLY:
-                # Check if already ran this week
-                week_start = now - timedelta(days=now.weekday())
-                week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
-                week_run = db.query(CampaignRun).filter(
-                    CampaignRun.campaign_id == campaign.id,
-                    CampaignRun.scheduled_at >= week_start
-                ).first()
-                
-                if not week_run:
-                    should_run = True
-            
-            # Monthly recurring campaigns
-            elif campaign.recurrence_type == RecurrenceType.MONTHLY:
-                # Check if already ran this month
-                month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-                month_run = db.query(CampaignRun).filter(
-                    CampaignRun.campaign_id == campaign.id,
-                    CampaignRun.scheduled_at >= month_start
-                ).first()
-                
-                if not month_run:
-                    should_run = True
-            
-            # Create and execute campaign run
-            if should_run:
-                logger.info(f"📅 Scheduling campaign run for '{campaign.name}' (ID: {campaign.id})")
-                
-                campaign_run = CampaignRun(
-                    campaign_id=campaign.id,
-                    scheduled_at=now,
-                    status=CampaignStatus.PENDING
-                )
-                db.add(campaign_run)
-                db.commit()
-                db.refresh(campaign_run)
-                
-                # Queue execution task
-                execute_campaign_run.delay(campaign_run.id)
-        
-        logger.info("✅ Campaign check completed")
-        
-    except Exception as e:
-        logger.error(f"❌ Error checking pending campaigns: {str(e)}")
-        raise
+        raw_mapping = (
+            ast.literal_eval(campaign.variable_mapping)
+            if isinstance(campaign.variable_mapping, str)
+            else campaign.variable_mapping
+        )
+        if not isinstance(raw_mapping, dict):
+            return {}
+        return {
+            key: (getattr(contact, value) or "" if isinstance(value, str) and hasattr(contact, value) else str(value))
+            for key, value in raw_mapping.items()
+        }
+    except Exception:
+        return {}
+
+
+def _build_messages(db, contacts, campaign, campaign_run, template) -> list:
+    logger.info(f"📋 Found {len(contacts)} contacts to message")
+    template_service = TemplateService(db)
+    messages = []
+
+    for contact in contacts:
+        language = contact.preferred_language or Language.ENGLISH
+        variables = _resolve_variables(campaign, contact)
+        body = template_service.render_template(campaign.template_id, language, variables) or ""
+
+        message = Message(
+            campaign_id=campaign.id,
+            campaign_run_id=campaign_run.id,
+            contact_id=contact.id,
+            jeweller_id=campaign.jeweller_id,
+            message_type=MessageType.CAMPAIGN,
+            phone_number=contact.phone_number,
+            template_name=template.template_name,
+            language=language,
+            message_body=body,
+            status=MessageStatus.QUEUED,
+            scheduled_at=now_utc(),
+        )
+        db.add(message)
+        messages.append(message)
+
+    db.commit()
+    return messages
+
+
+def _dispatch_messages(messages: list):
+    for message in messages:
+        send_campaign_message.delay(message.id)
+
+
+def _complete_run(db, campaign_run, contacts, messages):
+    campaign_run.total_contacts = len(contacts)
+    campaign_run.eligible_contacts = len(contacts)
+    campaign_run.messages_queued = len(messages)
+    campaign_run.messages_failed = 0
+    campaign_run.status = "COMPLETED"
+    campaign_run.completed_at = now_utc()
+    db.commit()

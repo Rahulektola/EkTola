@@ -5,12 +5,13 @@ Handles Facebook Embedded Signup flow for jewellers to connect their WhatsApp Bu
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import Optional
-from datetime import datetime, timedelta
+from datetime import timedelta
 import httpx
 import secrets
 import logging
 from jose import jwt, JWTError
 
+from app.core.datetime_utils import now_utc
 from app.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.encryption import encrypt_token, decrypt_token
@@ -35,7 +36,7 @@ def generate_state_token(jeweller_id: int, user_id: int) -> str:
     Generate signed state token for OAuth flow.
     Contains jeweller_id for security and tracking.
     """
-    expiry = datetime.utcnow() + timedelta(minutes=10)
+    expiry = now_utc() + timedelta(minutes=10)
     payload = {
         "jeweller_id": jeweller_id,
         "user_id": user_id,
@@ -363,7 +364,7 @@ async def embedded_signup_callback(
         webhook_verify_token = secrets.token_urlsafe(32)
         
         # Calculate expiry
-        token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+        token_expires_at = now_utc() + timedelta(seconds=expires_in)
         
         # Update jeweller record
         jeweller.fb_app_scoped_user_id = fb_user_id
@@ -375,8 +376,8 @@ async def embedded_signup_callback(
         jeweller.access_token_expires_at = token_expires_at
         jeweller.webhook_verify_token = webhook_verify_token
         jeweller.business_verification_status = verification_status
-        jeweller.whatsapp_connected_at = datetime.utcnow()
-        jeweller.updated_at = datetime.utcnow()
+        jeweller.whatsapp_connected_at = now_utc()
+        jeweller.updated_at = now_utc()
         
         db.commit()
         db.refresh(jeweller)
@@ -448,7 +449,7 @@ async def disconnect_whatsapp(
     jeweller.business_verification_status = None
     jeweller.whatsapp_connected_at = None
     jeweller.last_token_refresh = None
-    jeweller.updated_at = datetime.utcnow()
+    jeweller.updated_at = now_utc()
     
     db.commit()
     

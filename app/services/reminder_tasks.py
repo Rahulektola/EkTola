@@ -8,7 +8,6 @@ Schedule:
   - Calculates whether today is the reminder day for that contact
   - If yes AND no reminder was already sent this month → sends WhatsApp template message
 """
-import asyncio
 import calendar
 import logging
 from datetime import datetime, date, timedelta
@@ -19,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.celery_app import celery_app
 from app.config import settings
+from app.core.datetime_utils import now_utc
 from app.database import SessionLocal
 from app.models.contact import Contact
 from app.models.jeweller import Jeweller
@@ -100,7 +100,8 @@ def _send_reminder(
 
     Returns True on success.
     """
-    from app.services.whatsapp_service import get_jeweller_whatsapp_client, WhatsAppServiceError
+    from app.core.encryption import decrypt_token, TokenEncryptionError
+    from app.services.whatsapp_service import whatsapp_service, WhatsAppServiceError
 
     payment_day = (
         contact.sip_payment_day if message_type == MessageType.SIP_REMINDER
@@ -126,53 +127,46 @@ def _send_reminder(
         language=contact.preferred_language or Language.ENGLISH,
         message_body=rendered_body,
         status=MessageStatus.QUEUED,
-        scheduled_at=datetime.utcnow(),
-        queued_at=datetime.utcnow(),
+        scheduled_at=now_utc(),
+        queued_at=now_utc(),
     )
     db.add(message)
     db.flush()  # get message.id before sending
 
-    # Attempt to send via jeweller's WhatsApp client
+    # Attempt to send via jeweller's WhatsApp account using HTTPX
     try:
-        client = get_jeweller_whatsapp_client(contact.jeweller_id, db)
-        if client is None:
-            # Dev mode — mark as sent for traceability
-            logger.warning(
-                f"[DEV MODE] Reminder ({message_type.value}) to {contact.phone_number} "
-                f"for jeweller {contact.jeweller_id}"
+        if not jeweller.phone_number_id or not jeweller.access_token:
+            raise WhatsAppServiceError(
+                f"WhatsApp not connected for jeweller {contact.jeweller_id}",
+                error_code="WHATSAPP_NOT_CONNECTED"
             )
-            message.status = MessageStatus.SENT
-            message.sent_at = datetime.utcnow()
-            message.whatsapp_message_id = f"dev_{message_type.value}_{contact.id}_{today.isoformat()}"
-            db.flush()
-            return True
 
-        # Template body params: customer_name and due_date_str
+        try:
+            access_token = decrypt_token(jeweller.access_token)
+        except TokenEncryptionError as e:
+            raise WhatsAppServiceError(
+                f"Failed to decrypt token for jeweller {contact.jeweller_id}: {str(e)}",
+                error_code="DECRYPTION_FAILED"
+            )
+
         body_params = [contact.name or "Customer", due_date_str]
         language_code = (contact.preferred_language or Language.ENGLISH).value
 
-        # pywa 3.x send_template (sync wrapper around async call)
-        components = [
-            {
-                "type": "body",
-                "parameters": [{"type": "text", "text": p} for p in body_params],
-            }
-        ]
-
-        response = asyncio.run(
-            client.send_template(
-                to=contact.phone_number,
-                template=template_name,
-                language=language_code,
-                components=components,
-            )
+        response = whatsapp_service.send_template_message_sync(
+            phone_number_id=jeweller.phone_number_id,
+            access_token=access_token,
+            phone_number=contact.phone_number,
+            template_name=template_name,
+            language_code=language_code,
+            body_params=body_params,
         )
 
-        wa_msg_id = response.id if hasattr(response, "id") else str(response)
+        if not response.success:
+            raise WhatsAppServiceError(response.error or "WhatsApp send failed")
 
         message.status = MessageStatus.SENT
-        message.sent_at = datetime.utcnow()
-        message.whatsapp_message_id = wa_msg_id
+        message.sent_at = now_utc()
+        message.whatsapp_message_id = response.message_id
         db.flush()
 
         logger.info(
@@ -187,7 +181,7 @@ def _send_reminder(
             f"{e.message} [{e.error_code}]"
         )
         message.status = MessageStatus.FAILED
-        message.failed_at = datetime.utcnow()
+        message.failed_at = now_utc()
         message.failure_reason = f"{e.error_code}: {e.message}"
         db.flush()
         return False
@@ -197,7 +191,7 @@ def _send_reminder(
             f"❌ Error sending {message_type.value} to {contact.phone_number}: {e}"
         )
         message.status = MessageStatus.FAILED
-        message.failed_at = datetime.utcnow()
+        message.failed_at = now_utc()
         message.failure_reason = str(e)
         db.flush()
         return False
@@ -224,7 +218,7 @@ def send_payment_reminders(self):
       4. Update last_*_reminder_sent_at
     """
     db = self.db
-    now_utc = datetime.utcnow()
+    now_utc = now_utc()
     today = (now_utc + IST_OFFSET).date()
 
     logger.info(f"🔔 Starting payment reminder check for {today.isoformat()}")

@@ -3,14 +3,15 @@ Celery Tasks for Campaign Execution
 Background jobs for sending WhatsApp messages
 """
 import ast
-import asyncio
 import logging
 from datetime import timedelta
 from sqlalchemy.orm import joinedload
 
 from app.celery_app import celery_app
 from app.core.datetime_utils import now_utc
+from app.core.encryption import decrypt_token, TokenEncryptionError
 from app.models.campaign import Campaign, CampaignRun
+from app.models.jeweller import Jeweller
 from app.models.message import Message
 from app.models.contact import Contact
 from app.models.template import Template
@@ -129,13 +130,26 @@ def send_campaign_message(self, message_id: int):
 
         _, contact, template = related 
 
-        result = asyncio.run(
-            whatsapp_service.send_template_message(
-                phone_number=contact.phone_number,
-                template_name=template.template_name,
-                language_code=(contact.preferred_language or Language.ENGLISH).value,
-                body_params=message.message_body,
-            )
+        try:
+            jeweller = db.query(Jeweller).filter(Jeweller.id == contact.jeweller_id).first()
+            if not jeweller or not jeweller.phone_number_id or not jeweller.access_token:
+                raise ValueError("WhatsApp credentials not configured for jeweller")
+            access_token = decrypt_token(jeweller.access_token)
+        except (TokenEncryptionError, ValueError) as e:
+            logger.error(f"❌ WhatsApp send failed for message {message_id}: {str(e)}")
+            message.status = MessageStatus.FAILED
+            message.failure_reason = str(e)
+            message.updated_at = now_utc()
+            db.commit()
+            return
+
+        result = whatsapp_service.send_template_message_sync(
+            phone_number_id=jeweller.phone_number_id,
+            access_token=access_token,
+            phone_number=contact.phone_number,
+            template_name=template.template_name,
+            language_code=(contact.preferred_language or Language.ENGLISH).value,
+            body_params=message.message_body,
         )
 
         if result.success:

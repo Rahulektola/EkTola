@@ -8,6 +8,7 @@ import re
 import logging
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
+from app.core.datetime_utils import now_utc
 from datetime import datetime, timedelta
 
 import httpx
@@ -126,14 +127,14 @@ def get_jeweller_whatsapp_client(jeweller_id: int, db: Session) -> Optional[Any]
     
     # Check token expiry
     if jeweller.access_token_expires_at:
-        if jeweller.access_token_expires_at < datetime.utcnow():
+        if jeweller.access_token_expires_at < now_utc():
             raise WhatsAppServiceError(
                 f"WhatsApp access token expired for jeweller {jeweller_id}",
                 error_code="TOKEN_EXPIRED"
             )
         
         # Warn if token expires soon (within 7 days)
-        days_until_expiry = (jeweller.access_token_expires_at - datetime.utcnow()).days
+        days_until_expiry = (jeweller.access_token_expires_at - now_utc()).days
         if days_until_expiry < 7:
             logger.warning(f"WhatsApp token for jeweller {jeweller_id} expires in {days_until_expiry} days")
     
@@ -418,7 +419,100 @@ class WhatsAppService:
                 phone_number=phone_number,
                 error=str(e),
             )
-    
+
+    def send_template_message_sync(
+        self,
+        phone_number_id: str,
+        access_token: str,
+        phone_number: str,
+        template_name: str,
+        language_code: str = "en",
+        body_params: Optional[List[str]] = None,
+        header_params: Optional[List[Dict[str, str]]] = None,
+        button_params: Optional[List[Dict[str, str]]] = None,
+    ) -> MessageResult:
+        """Send a WhatsApp template message synchronously using HTTPX."""
+        if not phone_number_id or not access_token:
+            return MessageResult(
+                success=False,
+                phone_number=phone_number,
+                error="WhatsApp credentials are not configured",
+            )
+
+        if isinstance(body_params, str):
+            body_params = [body_params]
+
+        components = []
+        if header_params:
+            components.append({
+                "type": "header",
+                "parameters": [{"type": "text", "text": param} for param in header_params],
+            })
+        if body_params:
+            components.append({
+                "type": "body",
+                "parameters": [{"type": "text", "text": param} for param in body_params],
+            })
+        if button_params:
+            components.append({
+                "type": "button",
+                "sub_type": "quick_reply",
+                "index": "0",
+                "parameters": [{"type": "payload", "payload": param} for param in button_params],
+            })
+
+        url = f"https://graph.facebook.com/{settings.WHATSAPP_API_VERSION}/{phone_number_id}/messages"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": phone_number,
+            "type": "template",
+            "template": {
+                "name": template_name,
+                "language": {"code": language_code},
+            },
+        }
+        if components:
+            payload["template"]["components"] = components
+
+        try:
+            with httpx.Client(timeout=30.0) as client:
+                response = client.post(url, json=payload, headers=headers)
+                response.raise_for_status()
+                data = response.json()
+
+            messages = data.get("messages")
+            message_id = None
+            if isinstance(messages, list) and messages:
+                message_id = messages[0].get("id")
+            if not message_id:
+                message_id = data.get("id") or str(data)
+
+            logger.info(f"Template message sent successfully to {phone_number} via HTTPX")
+            return MessageResult(
+                success=True,
+                message_id=message_id,
+                phone_number=phone_number,
+            )
+        except httpx.HTTPStatusError as e:
+            logger.error(f"WhatsApp HTTP error sending template: {e.response.text if e.response is not None else str(e)}")
+            return MessageResult(
+                success=False,
+                phone_number=phone_number,
+                error=e.response.text if e.response is not None else str(e),
+                error_code=str(e.response.status_code) if e.response is not None else None,
+            )
+        except httpx.RequestError as e:
+            logger.error(f"HTTP request failed sending WhatsApp template: {str(e)}")
+            return MessageResult(
+                success=False,
+                phone_number=phone_number,
+                error=str(e),
+            )
+
     async def send_text_message(
         self,
         phone_number: str,

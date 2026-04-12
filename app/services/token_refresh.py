@@ -8,6 +8,7 @@ from typing import List
 import httpx
 from sqlalchemy.orm import Session
 
+from app.core.datetime_utils import now_utc
 from app.celery_app import celery
 from app.database import SessionLocal
 from app.models.jeweller import Jeweller
@@ -17,7 +18,7 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
-async def refresh_whatsapp_token(jeweller_id: int, current_token: str) -> dict:
+def refresh_whatsapp_token(jeweller_id: int, current_token: str) -> dict:
     """
     Refresh WhatsApp access token using Meta Graph API.
     
@@ -35,31 +36,31 @@ async def refresh_whatsapp_token(jeweller_id: int, current_token: str) -> dict:
         "client_secret": settings.WHATSAPP_APP_SECRET,
         "fb_exchange_token": current_token
     }
-    
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(url, params=params, timeout=30.0)
+
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            response = client.get(url, params=params)
             response.raise_for_status()
             data = response.json()
-            
-            access_token = data.get("access_token")
-            expires_in = data.get("expires_in", 5184000)  # Default 60 days
-            
-            if not access_token:
-                raise Exception("No access token in response")
-            
-            logger.info(f"Token refreshed successfully for jeweller {jeweller_id}")
-            return {
-                "access_token": access_token,
-                "expires_in": expires_in
-            }
-            
-        except httpx.HTTPError as e:
-            logger.error(f"HTTP error refreshing token for jeweller {jeweller_id}: {str(e)}")
-            raise
-        except Exception as e:
-            logger.error(f"Error refreshing token for jeweller {jeweller_id}: {str(e)}")
-            raise
+
+        access_token = data.get("access_token")
+        expires_in = data.get("expires_in", 5184000)  # Default 60 days
+
+        if not access_token:
+            raise Exception("No access token in response")
+
+        logger.info(f"Token refreshed successfully for jeweller {jeweller_id}")
+        return {
+            "access_token": access_token,
+            "expires_in": expires_in
+        }
+
+    except httpx.HTTPError as e:
+        logger.error(f"HTTP error refreshing token for jeweller {jeweller_id}: {str(e)}")
+        raise
+    except Exception as e:
+        logger.error(f"Error refreshing token for jeweller {jeweller_id}: {str(e)}")
+        raise
 
 
 @celery.task(name="refresh_expiring_whatsapp_tokens")
@@ -82,7 +83,7 @@ def refresh_expiring_tokens():
     
     try:
         # Calculate cutoff date (7 days from now)
-        cutoff_date = datetime.utcnow() + timedelta(days=7)
+        cutoff_date = now_utc() + timedelta(days=7)
         
         # Find jewellers with expiring tokens
         jewellers = db.query(Jeweller).filter(
@@ -110,7 +111,7 @@ def refresh_expiring_tokens():
         for jeweller in jewellers:
             try:
                 # Calculate days until expiry
-                days_until_expiry = (jeweller.access_token_expires_at - datetime.utcnow()).days
+                days_until_expiry = (jeweller.access_token_expires_at - now_utc()).days
                 logger.info(f"Refreshing token for jeweller {jeweller.id} ({jeweller.business_name}) - expires in {days_until_expiry} days")
                 
                 # Decrypt current token
@@ -125,29 +126,19 @@ def refresh_expiring_tokens():
                     })
                     continue
                 
-                # Refresh token (async function, need to run in event loop)
-                import asyncio
-                try:
-                    loop = asyncio.get_event_loop()
-                except RuntimeError:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                
-                refresh_data = loop.run_until_complete(
-                    refresh_whatsapp_token(jeweller.id, current_token)
-                )
-                
+                refresh_data = refresh_whatsapp_token(jeweller.id, current_token)
+
                 # Encrypt new token
                 new_token = refresh_data["access_token"]
                 expires_in = refresh_data["expires_in"]
-                
+
                 encrypted_token = encrypt_token(new_token)
-                
+
                 # Update database
                 jeweller.access_token = encrypted_token
-                jeweller.access_token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
-                jeweller.last_token_refresh = datetime.utcnow()
-                jeweller.updated_at = datetime.utcnow()
+                jeweller.access_token_expires_at = now_utc() + timedelta(seconds=expires_in)
+                jeweller.last_token_refresh = now_utc()
+                jeweller.updated_at = now_utc()
                 
                 db.commit()
                 
@@ -171,7 +162,7 @@ def refresh_expiring_tokens():
         
         result = {
             "status": "completed",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": now_utc().isoformat(),
             "total_jewellers": len(jewellers),
             "refreshed": refreshed_count,
             "failed": failed_count,
@@ -206,7 +197,7 @@ def check_expired_tokens():
         expired_jewellers = db.query(Jeweller).filter(
             Jeweller.access_token.isnot(None),
             Jeweller.access_token_expires_at.isnot(None),
-            Jeweller.access_token_expires_at < datetime.utcnow(),
+            Jeweller.access_token_expires_at < now_utc(),
             Jeweller.is_active == True
         ).all()
         
@@ -221,7 +212,7 @@ def check_expired_tokens():
         
         expired_info = []
         for jeweller in expired_jewellers:
-            days_expired = (datetime.utcnow() - jeweller.access_token_expires_at).days
+            days_expired = (now_utc() - jeweller.access_token_expires_at).days
             expired_info.append({
                 "jeweller_id": jeweller.id,
                 "business_name": jeweller.business_name,

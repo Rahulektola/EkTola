@@ -14,6 +14,7 @@ from app.models.jeweller import Jeweller
 from app.models.contact import Contact
 from app.models.campaign import Campaign, CampaignRun
 from app.models.message import Message
+from app.core.datetime_utils import now_utc
 from app.core.dependencies import get_current_admin
 from app.core.security import create_access_token
 from app.utils.enums import ApprovalStatus, MessageStatus, CampaignStatus, SegmentType, Language
@@ -293,7 +294,7 @@ def update_jeweller(
     for field, value in update_data.items():
         setattr(jeweller, field, value)
 
-    jeweller.updated_at = datetime.utcnow()
+    jeweller.updated_at = now_utc()
     db.commit()
     db.refresh(jeweller)
 
@@ -310,7 +311,7 @@ def update_admin_notes(
     """Update admin internal notes (private, never visible to jeweller)"""
     jeweller = _get_jeweller_or_404(db, jeweller_id)
     jeweller.admin_notes = request.admin_notes
-    jeweller.updated_at = datetime.utcnow()
+    jeweller.updated_at = now_utc()
     db.commit()
     db.refresh(jeweller)
     return _build_jeweller_detail(db, jeweller)
@@ -330,7 +331,7 @@ def update_meta_integration(
     for field, value in update_data.items():
         setattr(jeweller, field, value)
 
-    jeweller.updated_at = datetime.utcnow()
+    jeweller.updated_at = now_utc()
     db.commit()
     db.refresh(jeweller)
     return _build_jeweller_detail(db, jeweller)
@@ -357,7 +358,7 @@ def approve_jeweller(
         )
 
     jeweller.is_approved = True
-    jeweller.updated_at = datetime.utcnow()
+    jeweller.updated_at = now_utc()
     db.commit()
     db.refresh(jeweller)
 
@@ -384,7 +385,7 @@ def reject_jeweller(
     jeweller = _get_jeweller_or_404(db, jeweller_id)
 
     jeweller.is_approved = False
-    jeweller.updated_at = datetime.utcnow()
+    jeweller.updated_at = now_utc()
     db.commit()
     db.refresh(jeweller)
 
@@ -614,7 +615,7 @@ async def admin_upload_contacts(
                 existing.name = name
                 existing.segment = segment
                 existing.notes = f"Purpose: {purpose}, Date: {date_val}"
-                existing.updated_at = datetime.utcnow()
+                existing.updated_at = now_utc()
                 updated += 1
             else:
                 new_contact = Contact(
@@ -681,13 +682,13 @@ def admin_edit_contact(
     if opted_out is not None:
         contact.opted_out = opted_out
         if opted_out:
-            contact.opted_out_at = datetime.utcnow()
+            contact.opted_out_at = now_utc()
     if notes is not None:
         contact.notes = notes
     if tags is not None:
         contact.tags = tags
 
-    contact.updated_at = datetime.utcnow()
+    contact.updated_at = now_utc()
     db.commit()
     db.refresh(contact)
     return AdminContactListResponse.model_validate(contact)
@@ -705,7 +706,7 @@ def admin_delete_contact(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
 
     contact.is_deleted = True
-    contact.deleted_at = datetime.utcnow()
+    contact.deleted_at = now_utc()
     db.commit()
     return {"message": "Contact deleted", "contact_id": contact_id}
 
@@ -855,7 +856,7 @@ def admin_start_campaign(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Campaign is already active")
 
     campaign.status = CampaignStatus.ACTIVE
-    campaign.updated_at = datetime.utcnow()
+    campaign.updated_at = now_utc()
     db.commit()
 
     return {
@@ -961,7 +962,7 @@ def get_jeweller_analytics(
 ):
     """Single jeweller drill-down analytics for admin"""
     jeweller = _get_jeweller_or_404(db, jeweller_id)
-    start_date = datetime.utcnow() - timedelta(days=days)
+    start_date = now_utc() - timedelta(days=days)
 
     total_contacts = db.query(func.count(Contact.id)).filter(
         Contact.jeweller_id == jeweller_id,
@@ -1090,7 +1091,7 @@ def get_jeweller_whatsapp_status(
     # Calculate token expiry days
     token_expires_in_days = None
     if jeweller.access_token_expires_at:
-        delta = jeweller.access_token_expires_at - datetime.utcnow()
+        delta = jeweller.access_token_expires_at - now_utc()
         token_expires_in_days = delta.days
     
     return WhatsAppStatusResponse(
@@ -1135,7 +1136,7 @@ def list_deleted_contacts(
         query = query.filter(Contact.jeweller_id == jeweller_id)
     
     if older_than_days:
-        cutoff = datetime.utcnow() - timedelta(days=older_than_days)
+        cutoff = now_utc() - timedelta(days=older_than_days)
         query = query.filter(Contact.deleted_at <= cutoff)
     
     total = query.count()
@@ -1143,7 +1144,7 @@ def list_deleted_contacts(
         (page - 1) * page_size
     ).limit(page_size).all()
     
-    now = datetime.utcnow()
+    now = now_utc()
     contact_responses = []
     for c in contacts:
         days_since = (now - c.deleted_at).days if c.deleted_at else 0
@@ -1185,7 +1186,7 @@ def purge_deleted_contacts(
     
     **Admin only**
     """
-    cutoff = datetime.utcnow() - timedelta(days=request.older_than_days)
+    cutoff = now_utc() - timedelta(days=request.older_than_days)
     
     query = db.query(Contact).filter(
         Contact.is_deleted == True,
@@ -1246,7 +1247,7 @@ def restore_deleted_contacts(
         if contact:
             contact.is_deleted = False
             contact.deleted_at = None
-            contact.updated_at = datetime.utcnow()
+            contact.updated_at = now_utc()
             restored_ids.append(contact_id)
         else:
             failed_ids.append(contact_id)

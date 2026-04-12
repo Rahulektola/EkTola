@@ -47,7 +47,7 @@ def refresh_whatsapp_token(jeweller_id: int, current_token: str) -> dict:
         expires_in = data.get("expires_in", 5184000)  # Default 60 days
 
         if not access_token:
-            raise Exception("No access token in response")
+            raise ValueError("No access token in response")
 
         logger.info(f"Token refreshed successfully for jeweller {jeweller_id}")
         return {
@@ -57,6 +57,9 @@ def refresh_whatsapp_token(jeweller_id: int, current_token: str) -> dict:
 
     except httpx.HTTPError as e:
         logger.error(f"HTTP error refreshing token for jeweller {jeweller_id}: {str(e)}")
+        raise
+    except ValueError as e:
+        logger.error(f"Value error refreshing token for jeweller {jeweller_id}: {str(e)}")
         raise
     except Exception as e:
         logger.error(f"Error refreshing token for jeweller {jeweller_id}: {str(e)}")

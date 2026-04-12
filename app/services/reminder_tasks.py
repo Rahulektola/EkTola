@@ -10,6 +10,7 @@ Schedule:
 """
 import calendar
 import logging
+from dataclasses import dataclass
 from datetime import datetime, date, timedelta
 from typing import List, Optional
 
@@ -38,7 +39,46 @@ IST_OFFSET = timedelta(hours=5, minutes=30)
 
 
 # ---------------------------------------------------------------------------
-# Helper: calculate whether today is the reminder date
+# ReminderConfig: describes one reminder type (SIP or Loan) as data,
+# so the processing loop runs once for both instead of duplicating code.
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class ReminderConfig:
+    segment_types: tuple[SegmentType, ...]
+    payment_day_attr: str       # Contact attribute name, e.g. "sip_payment_day"
+    reminder_days_attr: str     # Contact attribute name, e.g. "sip_reminder_days_before"
+    last_sent_attr: str         # Contact attribute name, e.g. "last_sip_reminder_sent_at"
+    message_type: MessageType
+    template_name: str
+    label: str                  # Human-readable label for the message body
+    default_reminder_days: int = 3
+
+
+REMINDER_CONFIGS: list[ReminderConfig] = [
+    ReminderConfig(
+        segment_types=(SegmentType.GOLD_SIP, SegmentType.BOTH),
+        payment_day_attr="sip_payment_day",
+        reminder_days_attr="sip_reminder_days_before",
+        last_sent_attr="last_sip_reminder_sent_at",
+        message_type=MessageType.SIP_REMINDER,
+        template_name=settings.WHATSAPP_SIP_REMINDER_TEMPLATE,
+        label="Gold SIP",
+    ),
+    ReminderConfig(
+        segment_types=(SegmentType.GOLD_LOAN, SegmentType.BOTH),
+        payment_day_attr="loan_payment_day",
+        reminder_days_attr="loan_reminder_days_before",
+        last_sent_attr="last_loan_reminder_sent_at",
+        message_type=MessageType.LOAN_REMINDER,
+        template_name=settings.WHATSAPP_LOAN_REMINDER_TEMPLATE,
+        label="Gold Loan",
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# Helper: date / reminder logic
 # ---------------------------------------------------------------------------
 
 def _is_reminder_day(payment_day: int, days_before: int, today: date) -> bool:
@@ -74,12 +114,10 @@ def _format_due_date(payment_day: int, today: date) -> str:
     effective_day = min(payment_day, last_day)
     due = date(year, month, effective_day)
 
-    # Ordinal suffix
-    if 11 <= effective_day <= 13:
-        suffix = "th"
-    else:
-        suffix = {1: "st", 2: "nd", 3: "rd"}.get(effective_day % 10, "th")
-
+    suffix = (
+        "th" if 11 <= effective_day <= 13
+        else {1: "st", 2: "nd", 3: "rd"}.get(effective_day % 10, "th")
+    )
     return f"{effective_day}{suffix} {due.strftime('%B %Y')}"
 
 
@@ -90,8 +128,7 @@ def _format_due_date(payment_day: int, today: date) -> str:
 def _send_reminder(
     contact: Contact,
     jeweller: Jeweller,
-    message_type: MessageType,
-    template_name: str,
+    cfg: ReminderConfig,
     today: date,
     db: Session,
 ) -> bool:
@@ -103,27 +140,21 @@ def _send_reminder(
     from app.core.encryption import decrypt_token, TokenEncryptionError
     from app.services.whatsapp_service import whatsapp_service, WhatsAppServiceError
 
-    payment_day = (
-        contact.sip_payment_day if message_type == MessageType.SIP_REMINDER
-        else contact.loan_payment_day
-    )
+    payment_day = getattr(contact, cfg.payment_day_attr)
     due_date_str = _format_due_date(payment_day, today)
 
-    # Build the rendered message body (for audit / display purposes)
-    label = "Gold SIP" if message_type == MessageType.SIP_REMINDER else "Gold Loan"
     rendered_body = (
-        f"Hi {contact.name or 'Customer'}, your {label} payment is due on {due_date_str}. "
-        "Please ensure timely payment."
+        f"Hi {contact.name or 'Customer'}, your {cfg.label} payment is due on "
+        f"{due_date_str}. Please ensure timely payment."
     )
 
-    # Create Message record
     message = Message(
         jeweller_id=contact.jeweller_id,
         contact_id=contact.id,
         campaign_run_id=None,
-        message_type=message_type,
+        message_type=cfg.message_type,
         phone_number=contact.phone_number,
-        template_name=template_name,
+        template_name=cfg.template_name,
         language=contact.preferred_language or Language.ENGLISH,
         message_body=rendered_body,
         status=MessageStatus.QUEUED,
@@ -133,32 +164,28 @@ def _send_reminder(
     db.add(message)
     db.flush()  # get message.id before sending
 
-    # Attempt to send via jeweller's WhatsApp account using HTTPX
     try:
         if not jeweller.phone_number_id or not jeweller.access_token:
             raise WhatsAppServiceError(
                 f"WhatsApp not connected for jeweller {contact.jeweller_id}",
-                error_code="WHATSAPP_NOT_CONNECTED"
+                error_code="WHATSAPP_NOT_CONNECTED",
             )
 
         try:
             access_token = decrypt_token(jeweller.access_token)
         except TokenEncryptionError as e:
             raise WhatsAppServiceError(
-                f"Failed to decrypt token for jeweller {contact.jeweller_id}: {str(e)}",
-                error_code="DECRYPTION_FAILED"
+                f"Failed to decrypt token for jeweller {contact.jeweller_id}: {e}",
+                error_code="DECRYPTION_FAILED",
             )
-
-        body_params = [contact.name or "Customer", due_date_str]
-        language_code = (contact.preferred_language or Language.ENGLISH).value
 
         response = whatsapp_service.send_template_message_sync(
             phone_number_id=jeweller.phone_number_id,
             access_token=access_token,
             phone_number=contact.phone_number,
-            template_name=template_name,
-            language_code=language_code,
-            body_params=body_params,
+            template_name=cfg.template_name,
+            language_code=(contact.preferred_language or Language.ENGLISH).value,
+            body_params=[contact.name or "Customer", due_date_str],
         )
 
         if not response.success:
@@ -170,15 +197,15 @@ def _send_reminder(
         db.flush()
 
         logger.info(
-            f"✅ {message_type.value} reminder sent to {contact.phone_number} "
+            f"✅ {cfg.message_type.value} reminder sent to {contact.phone_number} "
             f"(jeweller {contact.jeweller_id})"
         )
         return True
 
     except WhatsAppServiceError as e:
         logger.error(
-            f"❌ WhatsApp error sending {message_type.value} to {contact.phone_number}: "
-            f"{e.message} [{e.error_code}]"
+            f"❌ WhatsApp error sending {cfg.message_type.value} to "
+            f"{contact.phone_number}: {e.message} [{e.error_code}]"
         )
         message.status = MessageStatus.FAILED
         message.failed_at = now_utc()
@@ -188,13 +215,115 @@ def _send_reminder(
 
     except Exception as e:
         logger.error(
-            f"❌ Error sending {message_type.value} to {contact.phone_number}: {e}"
+            f"❌ Unexpected error sending {cfg.message_type.value} to "
+            f"{contact.phone_number}: {e}"
         )
         message.status = MessageStatus.FAILED
         message.failed_at = now_utc()
         message.failure_reason = str(e)
         db.flush()
         return False
+
+
+# ---------------------------------------------------------------------------
+# Private helpers for the Celery task
+# ---------------------------------------------------------------------------
+
+def _fetch_jeweller_map(db: Session) -> dict[int, Jeweller]:
+    """
+    Return {jeweller_id: Jeweller} for all jewellers that have at least
+    one eligible contact with a SIP or Loan payment day set.
+    """
+    rows = (
+        db.query(Contact.jeweller_id)
+        .filter(
+            Contact.is_deleted == False,
+            Contact.opted_out == False,
+            or_(
+                Contact.sip_payment_day.isnot(None),
+                Contact.loan_payment_day.isnot(None),
+            ),
+        )
+        .distinct()
+        .all()
+    )
+    ids = [row[0] for row in rows]
+    if not ids:
+        return {}
+
+    jewellers = db.query(Jeweller).filter(Jeweller.id.in_(ids)).all()
+    return {j.id: j for j in jewellers}
+
+
+def _fetch_contacts(db: Session, jeweller_id: int, cfg: ReminderConfig) -> list[Contact]:
+    """Fetch eligible, active contacts for one jeweller and one reminder type."""
+    payment_day_col = getattr(Contact, cfg.payment_day_attr)
+    return (
+        db.query(Contact)
+        .filter(
+            Contact.jeweller_id == jeweller_id,
+            Contact.is_deleted == False,
+            Contact.opted_out == False,
+            Contact.segment.in_(cfg.segment_types),
+            payment_day_col.isnot(None),
+        )
+        .all()
+    )
+
+
+def _process_reminder_batch(
+    db: Session,
+    jeweller_id: int,
+    jeweller: Jeweller,
+    cfg: ReminderConfig,
+    today: date,
+    now: datetime,
+) -> tuple[int, int, int]:
+    """
+    Process all contacts for one jeweller and one reminder type.
+
+    Returns:
+        (sent, skipped, failed) counts
+    """
+    sent = skipped = failed = 0
+
+    for contact in _fetch_contacts(db, jeweller_id, cfg):
+        payment_day = getattr(contact, cfg.payment_day_attr)
+        reminder_days = getattr(contact, cfg.reminder_days_attr) or cfg.default_reminder_days
+        last_sent_at = getattr(contact, cfg.last_sent_attr)
+
+        if not _is_reminder_day(payment_day, reminder_days, today):
+            continue
+
+        if _already_sent_this_month(last_sent_at, today):
+            skipped += 1
+            continue
+
+        ok = _send_reminder(
+            contact=contact,
+            jeweller=jeweller,
+            cfg=cfg,
+            today=today,
+            db=db,
+        )
+        if ok:
+            setattr(contact, cfg.last_sent_attr, now)
+            sent += 1
+        else:
+            failed += 1
+
+    return sent, skipped, failed
+
+
+def _log_summary(today: date, counters: dict[MessageType, dict], failed: int) -> None:
+    parts = " | ".join(
+        f"{msg_type.value} sent={c['sent']} skipped={c['skipped']}"
+        for msg_type, c in counters.items()
+    )
+    logger.info(
+        f"✅ Payment reminder run complete for {today.isoformat()}: "
+        f"{parts} | Failed={failed}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -218,135 +347,37 @@ def send_payment_reminders(self):
       4. Update last_*_reminder_sent_at
     """
     db = self.db
-    now_utc = now_utc()
-    today = (now_utc + IST_OFFSET).date()
+    now = now_utc()
+    today = (now + IST_OFFSET).date()
 
     logger.info(f"🔔 Starting payment reminder check for {today.isoformat()}")
 
-    # Counters
-    sip_sent = 0
-    loan_sent = 0
-    sip_skipped = 0
-    loan_skipped = 0
+    counters = {cfg.message_type: {"sent": 0, "skipped": 0} for cfg in REMINDER_CONFIGS}
     failed = 0
 
     try:
-        # Get all approved jewellers that have contacts with schedules
-        jeweller_ids = (
-            db.query(Contact.jeweller_id)
-            .filter(
-                Contact.is_deleted == False,
-                Contact.opted_out == False,
-                or_(
-                    Contact.sip_payment_day.isnot(None),
-                    Contact.loan_payment_day.isnot(None),
-                ),
-            )
-            .distinct()
-            .all()
-        )
-        jeweller_ids = [j[0] for j in jeweller_ids]
+        jeweller_map = _fetch_jeweller_map(db)
 
-        if not jeweller_ids:
+        if not jeweller_map:
             logger.info("No contacts with payment schedules found.")
             return
 
-        # Batch-fetch all jewellers in a single query instead of one query per jeweller_id
-        jewellers = db.query(Jeweller).filter(Jeweller.id.in_(jeweller_ids)).all()
-        jeweller_map = {j.id: j for j in jewellers}
-
-        for jeweller_id in jeweller_ids:
-            jeweller = jeweller_map.get(jeweller_id)
-            if not jeweller:
-                continue
-
-            # ---- SIP Reminders ----
-            sip_contacts = (
-                db.query(Contact)
-                .filter(
-                    Contact.jeweller_id == jeweller_id,
-                    Contact.is_deleted == False,
-                    Contact.opted_out == False,
-                    Contact.segment.in_([SegmentType.GOLD_SIP, SegmentType.BOTH]),
-                    Contact.sip_payment_day.isnot(None),
-                )
-                .all()
-            )
-
-            for contact in sip_contacts:
-                if not _is_reminder_day(
-                    contact.sip_payment_day,
-                    contact.sip_reminder_days_before or 3,
-                    today,
-                ):
-                    continue  # not the day
-
-                if _already_sent_this_month(contact.last_sip_reminder_sent_at, today):
-                    sip_skipped += 1
-                    continue
-
-                ok = _send_reminder(
-                    contact=contact,
-                    jeweller=jeweller,
-                    message_type=MessageType.SIP_REMINDER,
-                    template_name=settings.WHATSAPP_SIP_REMINDER_TEMPLATE,
-                    today=today,
+        for jeweller_id, jeweller in jeweller_map.items():
+            for cfg in REMINDER_CONFIGS:
+                sent, skipped, errors = _process_reminder_batch(
                     db=db,
-                )
-                if ok:
-                    contact.last_sip_reminder_sent_at = now_utc
-                    sip_sent += 1
-                else:
-                    failed += 1
-
-            # ---- Loan Reminders ----
-            loan_contacts = (
-                db.query(Contact)
-                .filter(
-                    Contact.jeweller_id == jeweller_id,
-                    Contact.is_deleted == False,
-                    Contact.opted_out == False,
-                    Contact.segment.in_([SegmentType.GOLD_LOAN, SegmentType.BOTH]),
-                    Contact.loan_payment_day.isnot(None),
-                )
-                .all()
-            )
-
-            for contact in loan_contacts:
-                if not _is_reminder_day(
-                    contact.loan_payment_day,
-                    contact.loan_reminder_days_before or 3,
-                    today,
-                ):
-                    continue
-
-                if _already_sent_this_month(contact.last_loan_reminder_sent_at, today):
-                    loan_skipped += 1
-                    continue
-
-                ok = _send_reminder(
-                    contact=contact,
+                    jeweller_id=jeweller_id,
                     jeweller=jeweller,
-                    message_type=MessageType.LOAN_REMINDER,
-                    template_name=settings.WHATSAPP_LOAN_REMINDER_TEMPLATE,
+                    cfg=cfg,
                     today=today,
-                    db=db,
+                    now=now,
                 )
-                if ok:
-                    contact.last_loan_reminder_sent_at = now_utc
-                    loan_sent += 1
-                else:
-                    failed += 1
+                counters[cfg.message_type]["sent"] += sent
+                counters[cfg.message_type]["skipped"] += skipped
+                failed += errors
 
-        # Commit all changes at once
         db.commit()
-
-        logger.info(
-            f"✅ Payment reminder run complete for {today.isoformat()}: "
-            f"SIP sent={sip_sent} skipped={sip_skipped} | "
-            f"Loan sent={loan_sent} skipped={loan_skipped} | "
-            f"Failed={failed}"
-        )
+        _log_summary(today, counters, failed)
 
     except Exception as e:
         db.rollback()

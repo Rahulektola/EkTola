@@ -6,17 +6,6 @@
   <meta name="theme-color" content="#6366f1">
   <title>Contacts - ekTola Jeweller</title>
 
-  <!-- Unregister service worker temporarily for testing -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function(registrations) {
-        for(let registration of registrations) {
-          registration.unregister();
-        }
-      });
-    }
-  </script>
-
   <link rel="stylesheet" href="/css/style.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }

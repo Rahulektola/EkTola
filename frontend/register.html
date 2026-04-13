@@ -180,15 +180,6 @@
   <!-- Scripts -->
   <script type="module" src="/src/pages/register.ts"></script>
   <script>
-    // Register service worker
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/service-worker.js')
-          .then(registration => console.log('ServiceWorker registered'))
-          .catch(err => console.log('ServiceWorker registration failed:', err));
-      });
-    }
-
     // Check online/offline status
     function updateOnlineStatus() {
       const offlineIndicator = document.getElementById('offlineIndicator');

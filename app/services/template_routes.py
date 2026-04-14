@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.database import get_db
 from app.core.dependencies import get_current_admin, get_current_jeweller
-from app.core.datetime_utils import now_utc, utc_now
+from app.core.datetime_utils import now_utc, now_utc
 from app.models.jeweller import Jeweller
 from app.models.template import Template, TemplateTranslation
 from app.schemas.template import (

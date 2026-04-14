@@ -185,7 +185,8 @@ def _send_reminder(
             phone_number=contact.phone_number,
             template_name=cfg.template_name,
             language_code=(contact.preferred_language or Language.ENGLISH).value,
-            body_params=[contact.name or "Customer", due_date_str],
+            header_params=[contact.name or "Customer"],
+            body_params=[jeweller.business_name, today.strftime("%B")],
         )
 
         if not response.success:

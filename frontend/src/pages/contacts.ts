@@ -73,6 +73,7 @@ let currentSearch = '';
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 let selectedFile: File | null = null;
 let selectedContactIds: Set<number> = new Set();
+let pendingSendContactIds: number[] = [];
 
 // ========== Auth Check ==========
 
@@ -111,6 +112,15 @@ function initEventListeners(): void {
   document.getElementById('closeDeleteModal')?.addEventListener('click', closeDeleteModal);
   document.getElementById('cancelDeleteBtn')?.addEventListener('click', closeDeleteModal);
   document.getElementById('confirmDeleteBtn')?.addEventListener('click', confirmBulkDelete);
+
+  // Send Now
+  document.getElementById('sendNowSelectedBtn')?.addEventListener('click', () => {
+    if (selectedContactIds.size === 0) return;
+    openSendNowModal([...selectedContactIds]);
+  });
+  document.getElementById('closeSendNowModal')?.addEventListener('click', closeSendNowModal);
+  document.getElementById('cancelSendNowBtn')?.addEventListener('click', closeSendNowModal);
+  document.getElementById('confirmSendNowBtn')?.addEventListener('click', confirmSendNow);
 
   // Search
   const searchInput = document.getElementById('searchInput') as HTMLInputElement;
@@ -343,7 +353,7 @@ function renderContacts(data: ContactListResponse): void {
           <th>Phone</th>
           <th>Segment</th>
           <th>Payment Day</th>
-          <th class="contact-actions-cell">Edit</th>
+          <th class="contact-actions-cell">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -362,6 +372,7 @@ function renderContacts(data: ContactListResponse): void {
             </td>
             <td style="font-size: 13px; color: var(--text-secondary);">${formatPaymentDayCell(contact)}</td>
             <td class="contact-actions-cell">
+              ${contact.segment !== 'MARKETING' ? `<button class="btn-send-now" data-contact-id="${contact.id}" title="Send reminder now">📤</button>` : ''}
               <button class="btn-edit" data-contact-id="${contact.id}"
                 data-contact-name="${escapeHtml(contact.name || '')}"
                 data-contact-phone="${escapeHtml(contact.phone_number)}"
@@ -385,6 +396,9 @@ function renderContacts(data: ContactListResponse): void {
 
   // Attach edit button listeners
   attachEditListeners();
+
+  // Attach send-now button listeners
+  attachSendNowListeners();
 }
 
 function renderPagination(data: ContactListResponse): void {
@@ -869,22 +883,109 @@ function updateDeleteButton(): void {
   const deleteCountEl = document.getElementById('deleteCount');
   const editBtn = document.getElementById('editSelectedBtn');
   const editCountEl = document.getElementById('editCount');
+  const sendBtn = document.getElementById('sendNowSelectedBtn');
+  const sendCountEl = document.getElementById('sendNowCount');
 
   const count = selectedContactIds.size;
   if (count > 0) {
     deleteBtn?.classList.add('show');
     editBtn?.classList.add('show');
+    sendBtn?.classList.add('show');
     if (deleteCountEl) deleteCountEl.textContent = count.toString();
     if (editCountEl) editCountEl.textContent = count.toString();
+    if (sendCountEl) sendCountEl.textContent = count.toString();
   } else {
     deleteBtn?.classList.remove('show');
     editBtn?.classList.remove('show');
+    sendBtn?.classList.remove('show');
   }
 }
 
 function clearSelection(): void {
   selectedContactIds.clear();
   updateDeleteButton();
+}
+
+// ========== Send Now ==========
+
+function attachSendNowListeners(): void {
+  document.querySelectorAll('.btn-send-now').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const el = btn as HTMLElement;
+      const id = parseInt(el.dataset.contactId || '0', 10);
+      if (id) openSendNowModal([id]);
+    });
+  });
+}
+
+function openSendNowModal(contactIds: number[]): void {
+  if (contactIds.length === 0) return;
+  pendingSendContactIds = contactIds;
+
+  const countEl = document.getElementById('sendNowConfirmCount');
+  if (countEl) countEl.textContent = contactIds.length.toString();
+
+  document.getElementById('sendNowConfirmModal')?.classList.add('active');
+}
+
+function closeSendNowModal(): void {
+  document.getElementById('sendNowConfirmModal')?.classList.remove('active');
+  pendingSendContactIds = [];
+}
+
+async function confirmSendNow(): Promise<void> {
+  if (pendingSendContactIds.length === 0) return;
+
+  const confirmBtn = document.getElementById('confirmSendNowBtn') as HTMLButtonElement;
+  if (confirmBtn) {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Sending...';
+  }
+
+  try {
+    let url: string;
+    let body: string;
+
+    if (pendingSendContactIds.length === 1) {
+      url = `${API_BASE}/send-now/single`;
+      body = JSON.stringify({ contact_id: pendingSendContactIds[0] });
+    } else {
+      url = `${API_BASE}/send-now/bulk`;
+      body = JSON.stringify({ contact_ids: pendingSendContactIds });
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        ...window.authService.getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body,
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.authService.logout();
+        window.location.href = '/index.html';
+        return;
+      }
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || `Failed to send (${response.status})`);
+    }
+
+    const result = await response.json();
+    closeSendNowModal();
+    alert(`✅ ${result.message || 'Reminder(s) queued for delivery'}`);
+
+  } catch (err) {
+    alert(`❌ ${err instanceof Error ? err.message : 'Failed to send reminders'}`);
+  } finally {
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = '📤 Send Now';
+    }
+  }
 }
 
 function openDeleteModal(): void {

@@ -933,8 +933,86 @@
       color: var(--primary-color);
     }
 
+    /* Per-row Send Now Button */
+    .btn-send-now {
+      background: none;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+      color: var(--text-secondary);
+    }
+
+    .btn-send-now:hover {
+      background: #ecfdf5;
+      border-color: var(--success-color);
+      color: var(--success-color);
+    }
+
+    /* Bulk Send Now Button */
+    .btn-send-selected {
+      background: var(--success-color);
+      color: white;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .btn-send-selected:hover {
+      background: #059669;
+    }
+
+    .btn-send-selected.show {
+      display: inline-flex;
+    }
+
+    .send-count-badge {
+      background: rgba(255, 255, 255, 0.25);
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    /* Send Now Confirmation Modal */
+    .send-confirm-icon {
+      font-size: 48px;
+      text-align: center;
+      margin-bottom: 16px;
+    }
+
+    .send-confirm-text {
+      text-align: center;
+      font-size: 15px;
+      color: var(--text-color);
+      line-height: 1.6;
+      margin-bottom: 8px;
+    }
+
+    .send-confirm-text strong {
+      color: var(--success-color);
+    }
+
+    .send-confirm-subtext {
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .btn-confirm-send {
+      background: var(--success-color);
+      color: white;
+    }
+
+    .btn-confirm-send:hover {
+      background: #059669;
+    }
+
     .contact-actions-cell {
-      width: 60px;
+      width: 100px;
       text-align: center;
     }
 
@@ -1019,17 +1097,20 @@
         <p>Manage all your contacts and segments</p>
       </div>
       <div class="header-actions">
+        <button class="btn btn-send-selected" id="sendNowSelectedBtn">
+          📤 Send Now <span class="send-count-badge" id="sendNowCount">0</span>
+        </button>
         <button class="btn btn-edit-selected" id="editSelectedBtn">
           ✏️ Edit Selected <span class="edit-count-badge" id="editCount">0</span>
-        </button>
-        <button class="btn btn-delete-selected" id="deleteSelectedBtn">
-          🗑️ Delete Selected <span class="delete-count-badge" id="deleteCount">0</span>
         </button>
         <button class="btn btn-secondary" id="addContactBtn">
           ➕ Add Contact
         </button>
         <button class="btn btn-primary" id="bulkUploadBtn">
           📁 Bulk Upload
+        </button>
+        <button class="btn btn-delete-selected" id="deleteSelectedBtn">
+          🗑️ Delete Selected <span class="delete-count-badge" id="deleteCount">0</span>
         </button>
       </div>
     </div>
@@ -1459,6 +1540,29 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" id="cancelBulkEdit">Cancel</button>
         <button class="btn btn-primary" id="submitBulkEdit">Apply Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Send Now Confirmation Modal -->
+  <div class="modal-overlay" id="sendNowConfirmModal">
+    <div class="modal" style="max-width: 420px;">
+      <div class="modal-header">
+        <h3 class="modal-title">📤 Send Reminder Now</h3>
+        <button class="modal-close" id="closeSendNowModal">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="send-confirm-icon">📤</div>
+        <div class="send-confirm-text">
+          Send reminders to <strong id="sendNowConfirmCount">0</strong> contact(s)?
+        </div>
+        <div class="send-confirm-subtext">
+          Each contact will receive the reminder matching their registered segment (Gold SIP / Gold Loan).
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelSendNowBtn">Cancel</button>
+        <button class="btn btn-confirm-send" id="confirmSendNowBtn">📤 Send Now</button>
       </div>
     </div>
   </div>

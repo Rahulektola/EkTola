@@ -15,6 +15,7 @@ celery_app = Celery(
         'app.services.campaign_tasks',   # Campaign execution tasks
         'app.services.token_refresh',    # Token refresh tasks
         'app.services.reminder_tasks',   # SIP/Loan reminder tasks
+        'app.services.send_now_tasks',   # Manual send-now tasks
     ]
 )
 
@@ -34,6 +35,7 @@ celery_app.conf.update(
     task_routes={
         'app.services.campaign_tasks.*': {'queue': 'campaigns'},
         'app.services.reminder_tasks.*': {'queue': 'campaigns'},
+        'app.services.send_now_tasks.*': {'queue': 'campaigns'},
     },
     
     # Task execution settings

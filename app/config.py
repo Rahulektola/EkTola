@@ -26,8 +26,8 @@ class Settings(BaseSettings):
     WHATSAPP_OTP_TEMPLATE_NAME: str = "otp_verification"  # Approved template name
     
     # Payment Reminder Templates
-    WHATSAPP_SIP_REMINDER_TEMPLATE: str = "sip_payment_reminder"  # Gold SIP due reminder
-    WHATSAPP_LOAN_REMINDER_TEMPLATE: str = "loan_payment_reminder"  # Gold Loan EMI due reminder
+    WHATSAPP_SIP_REMINDER_TEMPLATE: str = "gold_sip_template"  # Gold SIP due reminder
+    WHATSAPP_LOAN_REMINDER_TEMPLATE: str = "loan_reminder_template"  # Gold Loan EMI due reminder
     PAYMENT_REMINDER_SEND_HOUR: int = 9  # Hour (IST, 24h) when daily reminder task runs
     
     # WhatsApp Embedded Signup Settings

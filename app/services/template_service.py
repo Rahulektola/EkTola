@@ -3,6 +3,7 @@ Template Management Service
 Synchronizes WhatsApp templates with local database
 """
 import logging
+import re
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -11,6 +12,22 @@ from sqlalchemy.orm import Session
 from app.models.template import Template, TemplateTranslation
 from app.services.whatsapp_service import whatsapp_service, TemplateResult
 from app.utils.enums import CampaignType, Language, SegmentType
+
+# Map WhatsApp language codes to local Language enum values
+_LANGUAGE_ENUM_VALUES = {lang.value for lang in Language}
+
+def _map_wa_language(wa_lang: str) -> Optional[Language]:
+    """Map a WhatsApp language code (e.g. 'en_US', 'hi') to the local Language enum."""
+    if not wa_lang:
+        return None
+    # Direct match?
+    if wa_lang in _LANGUAGE_ENUM_VALUES:
+        return Language(wa_lang)
+    # Try base code (en_US -> en)
+    base = wa_lang.split("_")[0]
+    if base in _LANGUAGE_ENUM_VALUES:
+        return Language(base)
+    return None
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +67,17 @@ _DUMMY_VALUE_MAP: Dict[str, str] = {
     "weight": "10g",
     "gold_weight": "10g",
     "rate": "\u20b97,200/g",
+    # Generic positional names (auto-generated during WhatsApp sync)
+    "header_param_1": "Rahul",
+    "header_param_2": "Shree Jewellers",
+    "body_param_1": "Rahul",
+    "body_param_2": "\u20b95,000",
+    "body_param_3": "15-Jan-2026",
+    "body_param_4": "Gold SIP Monthly",
+    "body_param_5": "5",
+    "body_param_6": "12",
+    "body_param_7": "10g",
+    "body_param_8": "\u20b97,200/g",
 }
 
 
@@ -114,7 +142,8 @@ class TemplateService:
     
     async def sync_templates_from_whatsapp(self) -> Dict[str, Any]:
         """
-        Fetch templates from WhatsApp and sync with local database
+        Fetch templates from WhatsApp and sync with local database.
+        Creates new local records for templates that don't exist yet.
         
         Returns:
             Dict with sync results (created, updated, skipped counts)
@@ -140,7 +169,18 @@ class TemplateService:
             
             for wa_template in wa_templates:
                 template_name = wa_template.get("name")
-                
+                wa_language_raw = wa_template.get("language")
+                wa_status = wa_template.get("status", "PENDING")
+                wa_category = wa_template.get("category", "UTILITY")
+                wa_id = wa_template.get("id")
+
+                # Map WhatsApp language to local enum
+                local_lang = _map_wa_language(wa_language_raw)
+                if local_lang is None:
+                    logger.warning(f"Skipping template {template_name}: unsupported language '{wa_language_raw}'")
+                    skipped_count += 1
+                    continue
+
                 try:
                     # Check if template exists in database
                     existing = self.db.query(Template).filter(
@@ -148,17 +188,79 @@ class TemplateService:
                     ).first()
                     
                     if existing:
-                        # Update existing template translation status
+                        # Update or add translation
+                        matched = False
                         for translation in existing.translations:
-                            if translation.language.value == wa_template.get("language"):
-                                translation.whatsapp_template_id = wa_template.get("id")
-                                translation.approval_status = wa_template.get("status", "PENDING")
+                            if translation.language == local_lang:
+                                translation.whatsapp_template_id = wa_id
+                                translation.approval_status = wa_status
                                 translation.updated_at = datetime.utcnow()
+                                matched = True
                                 updated_count += 1
+                                break
+                        if not matched:
+                            # Language translation doesn't exist locally — create it
+                            body_text, header_text, footer_text, _hvc, _bvc = self._extract_component_texts(
+                                wa_template.get("components", [])
+                            )
+                            new_trans = TemplateTranslation(
+                                template_id=existing.id,
+                                language=local_lang,
+                                body_text=body_text or template_name,
+                                header_text=header_text,
+                                footer_text=footer_text,
+                                whatsapp_template_id=wa_id,
+                                approval_status=wa_status,
+                            )
+                            self.db.add(new_trans)
+                            updated_count += 1
                     else:
-                        # Template doesn't exist locally, skip (admin should create it)
-                        skipped_count += 1
-                        logger.info(f"Skipping template {template_name} - not found in local database")
+                        # Template doesn't exist locally — create it from WhatsApp data
+                        body_text, header_text, footer_text, header_var_count, body_var_count = self._extract_component_texts(
+                            wa_template.get("components", [])
+                        )
+
+                        # Determine campaign_type from WhatsApp category
+                        campaign_type = CampaignType.MARKETING if wa_category == "MARKETING" else CampaignType.UTILITY
+
+                        # Count variable placeholders in HEADER + BODY
+                        variable_count = header_var_count + body_var_count
+
+                        # Auto-generate variable names: header params first, then body
+                        var_name_parts = []
+                        for i in range(1, header_var_count + 1):
+                            var_name_parts.append(f"header_param_{i}")
+                        for i in range(1, body_var_count + 1):
+                            var_name_parts.append(f"body_param_{i}")
+                        variable_names_csv = ",".join(var_name_parts) if var_name_parts else None
+
+                        # Build display name from template_name
+                        display_name = template_name.replace("_", " ").title()
+
+                        new_template = Template(
+                            template_name=template_name,
+                            display_name=display_name,
+                            campaign_type=campaign_type,
+                            category=wa_category,
+                            variable_count=variable_count,
+                            variable_names=variable_names_csv,
+                            is_active=True,
+                        )
+                        self.db.add(new_template)
+                        self.db.flush()  # Get new_template.id
+
+                        new_trans = TemplateTranslation(
+                            template_id=new_template.id,
+                            language=local_lang,
+                            body_text=body_text or template_name,
+                            header_text=header_text,
+                            footer_text=footer_text,
+                            whatsapp_template_id=wa_id,
+                            approval_status=wa_status,
+                        )
+                        self.db.add(new_trans)
+                        created_count += 1
+                        logger.info(f"Created template {template_name} from WhatsApp ({local_lang.value}, {wa_status})")
                     
                 except Exception as e:
                     logger.error(f"Error processing template {template_name}: {e}")
@@ -180,6 +282,38 @@ class TemplateService:
                 "success": False,
                 "error": str(e),
             }
+
+    @staticmethod
+    def _extract_component_texts(components) -> tuple:
+        """Extract body, header, footer text from WhatsApp template components.
+
+        Returns:
+            (body_text, header_text, footer_text, header_var_count, body_var_count)
+        """
+        body_text = None
+        header_text = None
+        footer_text = None
+        for comp in (components or []):
+            comp_type = None
+            if isinstance(comp, dict):
+                comp_type = comp.get("type", "")
+            else:
+                comp_type = getattr(comp, "type", "")
+                if hasattr(comp_type, "value"):
+                    comp_type = comp_type.value
+
+            comp_type_upper = str(comp_type).upper()
+
+            if comp_type_upper == "BODY":
+                body_text = comp.get("text") if isinstance(comp, dict) else getattr(comp, "text", None)
+            elif comp_type_upper == "HEADER":
+                header_text = comp.get("text") if isinstance(comp, dict) else getattr(comp, "text", None)
+            elif comp_type_upper == "FOOTER":
+                footer_text = comp.get("text") if isinstance(comp, dict) else getattr(comp, "text", None)
+
+        header_var_count = len(re.findall(r'\{\{\d+\}\}', header_text or ""))
+        body_var_count = len(re.findall(r'\{\{\d+\}\}', body_text or ""))
+        return body_text, header_text, footer_text, header_var_count, body_var_count
     
     async def create_template_in_whatsapp(
         self,

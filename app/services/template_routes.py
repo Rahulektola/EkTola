@@ -377,12 +377,18 @@ def _build_preview_response(
     """
     Build a TemplatePreviewResponse with dummy variable values rendered.
 
+    Header and body components use independent {{1}}, {{2}} numbering,
+    so we split variable_names into header-portion and body-portion based
+    on the actual placeholder count in each component text.
+
     Args:
         template: The Template ORM object.
         approved_only: If True, only include APPROVED translations.
     """
+    import re
+
     dummy_values = generate_dummy_values(template.variable_names)
-    var_names = [
+    all_var_names = [
         v.strip() for v in (template.variable_names or "").split(",") if v.strip()
     ]
 
@@ -390,6 +396,12 @@ def _build_preview_response(
     for trans in template.translations:
         if approved_only and trans.approval_status != "APPROVED":
             continue
+
+        # Count placeholders per component to split variable names correctly
+        header_var_count = len(re.findall(r'\{\{\d+\}\}', trans.header_text or ""))
+        header_var_names = all_var_names[:header_var_count]
+        body_var_names = all_var_names[header_var_count:]
+
         translation_previews.append(
             TemplateTranslationPreview(
                 id=trans.id,
@@ -400,13 +412,13 @@ def _build_preview_response(
                 footer_text=trans.footer_text,
                 approval_status=trans.approval_status,
                 example_header=render_text_with_variables(
-                    trans.header_text, var_names, dummy_values
+                    trans.header_text, header_var_names, dummy_values
                 ),
                 example_body=render_text_with_variables(
-                    trans.body_text, var_names, dummy_values
+                    trans.body_text, body_var_names, dummy_values
                 ) or trans.body_text,
                 example_footer=render_text_with_variables(
-                    trans.footer_text, var_names, dummy_values
+                    trans.footer_text, [], dummy_values
                 ),
             )
         )

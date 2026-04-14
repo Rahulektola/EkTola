@@ -1055,7 +1055,13 @@
   <script type="module" src="/src/pages/whatsapp-connect.ts"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      ['navCampaignsBtn','navTemplatesBtn','newCampaignBtn'].forEach(function(id) {
+      // Templates button navigates to the templates page
+      var templatesBtn = document.getElementById('navTemplatesBtn');
+      if (templatesBtn) templatesBtn.addEventListener('click', function() {
+        window.location.href = '/templates.html';
+      });
+      // Campaigns + New Campaign still show WIP
+      ['navCampaignsBtn','newCampaignBtn'].forEach(function(id) {
         var el = document.getElementById(id);
         if (el) el.addEventListener('click', function() {
           document.getElementById('wipModal').style.display = 'flex';

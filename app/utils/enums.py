@@ -62,6 +62,7 @@ class MessageType(str, Enum):
     CAMPAIGN = "CAMPAIGN"         # Sent as part of a marketing / utility campaign
     SIP_REMINDER = "SIP_REMINDER" # Gold SIP payment due reminder
     LOAN_REMINDER = "LOAN_REMINDER"  # Gold Loan payment due reminder
+    MANUAL_REMINDER = "MANUAL_REMINDER"  # Jeweller-triggered immediate reminder
 
 
 class RecurrenceType(str, Enum):

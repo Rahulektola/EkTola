@@ -5,7 +5,7 @@ from starlette.requests import Request
 from contextlib import asynccontextmanager
 import logging
 
-from app.services import admin_routes, auth_routes, contact_routes, campaign_routes, template_routes, analytics_routes, webhook_routes, whatsapp_auth_routes
+from app.services import admin_routes, auth_routes, contact_routes, campaign_routes, template_routes, analytics_routes, webhook_routes, whatsapp_auth_routes, send_now_routes
 from app.database import engine, Base
 from app.config import settings
 
@@ -71,6 +71,7 @@ app.include_router(campaign_routes.router)
 app.include_router(template_routes.router)
 app.include_router(analytics_routes.router)
 app.include_router(webhook_routes.router)
+app.include_router(send_now_routes.router)
 
 
 @app.get("/")

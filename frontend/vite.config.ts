@@ -35,6 +35,8 @@ export default defineConfig({
         adminJewellerDetail: resolve(__dirname, 'admin/jeweller-detail.html'),
         adminAnalytics: resolve(__dirname, 'admin/analytics.html'),
         adminDeletedContacts: resolve(__dirname, 'admin/deleted-contacts.html'),
+        adminTemplates: resolve(__dirname, 'admin/templates.html'),
+        profile: resolve(__dirname, 'profile.html'),
       },
     },
   },

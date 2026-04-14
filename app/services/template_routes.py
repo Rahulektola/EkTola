@@ -1,16 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from typing import List
+from sqlalchemy.orm import Session, joinedload
+from typing import List, Dict
 from app.database import get_db
-from app.core.dependencies import get_current_admin, get_current_jeweller
+from app.core.dependencies import get_current_admin, get_current_jeweller, get_current_user
 from app.core.datetime_utils import now_utc, now_utc
 from app.models.jeweller import Jeweller
 from app.models.template import Template, TemplateTranslation
 from app.schemas.template import (
-    TemplateCreate, TemplateUpdate, TemplateResponse, TemplateListResponse
+    TemplateCreate, TemplateUpdate, TemplateResponse, TemplateListResponse,
+    TemplatePreviewResponse, TemplateTranslationPreview
 )
 from app.utils.enums import CampaignType
-from app.services.template_service import TemplateService
+from app.services.template_service import TemplateService, generate_dummy_values, render_text_with_variables
 from datetime import datetime
 
 router = APIRouter(prefix="/templates", tags=["Templates"])
@@ -25,10 +26,21 @@ def list_templates_for_jeweller(
     db: Session = Depends(get_db)
 ):
     """
-    List available templates for jeweller to use in campaigns
-    Filtered by campaign type if provided
+    List available templates for jeweller to use in campaigns.
+    Excludes AUTHENTICATION (OTP) templates.
+    Only returns templates with at least one APPROVED translation.
     """
-    query = db.query(Template).filter(Template.is_active == True)
+    query = (
+        db.query(Template)
+        .filter(
+            Template.is_active == True,
+            Template.category != "AUTHENTICATION",
+        )
+        .join(Template.translations)
+        .filter(TemplateTranslation.approval_status == "APPROVED")
+        .distinct()
+        .options(joinedload(Template.translations))
+    )
     
     if campaign_type:
         query = query.filter(Template.campaign_type == campaign_type)
@@ -39,6 +51,31 @@ def list_templates_for_jeweller(
         templates=templates,
         total=len(templates)
     )
+
+
+@router.get("/{template_id}/preview", response_model=TemplatePreviewResponse)
+def preview_template_for_jeweller(
+    template_id: int,
+    current_jeweller: Jeweller = Depends(get_current_jeweller),
+    db: Session = Depends(get_db)
+):
+    """
+    Jeweller: Preview a template with example variable values filled in.
+    Excludes AUTHENTICATION templates.
+    """
+    template = db.query(Template).filter(
+        Template.id == template_id,
+        Template.is_active == True,
+        Template.category != "AUTHENTICATION",
+    ).first()
+
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Template not found"
+        )
+
+    return _build_preview_response(template)
 
 
 @router.get("/{template_id}", response_model=TemplateResponse)
@@ -71,6 +108,35 @@ def list_all_templates_admin(
 ):
     """Admin: List all templates including inactive"""
     templates = db.query(Template).all()
+    return TemplateListResponse(
+        templates=templates,
+        total=len(templates)
+    )
+
+
+@router.get("/admin/approved", response_model=TemplateListResponse)
+def list_approved_templates_admin(
+    campaign_type: CampaignType = None,
+    current_admin = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Admin: List all active templates that have at least one APPROVED translation.
+    Includes all categories (UTILITY, MARKETING, AUTHENTICATION).
+    """
+    query = (
+        db.query(Template)
+        .filter(Template.is_active == True)
+        .join(Template.translations)
+        .filter(TemplateTranslation.approval_status == "APPROVED")
+        .distinct()
+        .options(joinedload(Template.translations))
+    )
+
+    if campaign_type:
+        query = query.filter(Template.campaign_type == campaign_type)
+
+    templates = query.all()
     return TemplateListResponse(
         templates=templates,
         total=len(templates)
@@ -277,3 +343,84 @@ async def list_whatsapp_templates(
         "templates": templates,
         "total": len(templates)
     }
+
+
+@router.get("/admin/{template_id}/preview", response_model=TemplatePreviewResponse)
+def preview_template_for_admin(
+    template_id: int,
+    current_admin = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Admin: Preview a template with example variable values filled in.
+    Shows all translations including non-approved ones.
+    """
+    template = db.query(Template).filter(
+        Template.id == template_id,
+    ).first()
+
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Template not found"
+        )
+
+    return _build_preview_response(template, approved_only=False)
+
+
+# ============ Shared Helpers ============
+
+def _build_preview_response(
+    template: Template,
+    approved_only: bool = True,
+) -> TemplatePreviewResponse:
+    """
+    Build a TemplatePreviewResponse with dummy variable values rendered.
+
+    Args:
+        template: The Template ORM object.
+        approved_only: If True, only include APPROVED translations.
+    """
+    dummy_values = generate_dummy_values(template.variable_names)
+    var_names = [
+        v.strip() for v in (template.variable_names or "").split(",") if v.strip()
+    ]
+
+    translation_previews = []
+    for trans in template.translations:
+        if approved_only and trans.approval_status != "APPROVED":
+            continue
+        translation_previews.append(
+            TemplateTranslationPreview(
+                id=trans.id,
+                template_id=trans.template_id,
+                language=trans.language,
+                header_text=trans.header_text,
+                body_text=trans.body_text,
+                footer_text=trans.footer_text,
+                approval_status=trans.approval_status,
+                example_header=render_text_with_variables(
+                    trans.header_text, var_names, dummy_values
+                ),
+                example_body=render_text_with_variables(
+                    trans.body_text, var_names, dummy_values
+                ) or trans.body_text,
+                example_footer=render_text_with_variables(
+                    trans.footer_text, var_names, dummy_values
+                ),
+            )
+        )
+
+    return TemplatePreviewResponse(
+        id=template.id,
+        template_name=template.template_name,
+        display_name=template.display_name,
+        campaign_type=template.campaign_type,
+        sub_segment=template.sub_segment,
+        description=template.description,
+        category=template.category,
+        variable_count=template.variable_count,
+        variable_names=template.variable_names,
+        dummy_values=dummy_values,
+        translations=translation_previews,
+    )

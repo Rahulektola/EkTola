@@ -15,6 +15,94 @@ from app.utils.enums import CampaignType, Language, SegmentType
 logger = logging.getLogger(__name__)
 
 
+# ============ Dummy value mapping for template preview ============
+
+_DUMMY_VALUE_MAP: Dict[str, str] = {
+    "customer_name": "Rahul",
+    "name": "Rahul",
+    "first_name": "Rahul",
+    "last_name": "Sharma",
+    "full_name": "Rahul Sharma",
+    "amount": "\u20b95,000",
+    "loan_amount": "\u20b950,000",
+    "sip_amount": "\u20b95,000",
+    "payment_amount": "\u20b95,000",
+    "due_amount": "\u20b95,000",
+    "date": "15-Jan-2026",
+    "due_date": "15-Jan-2026",
+    "payment_date": "15-Jan-2026",
+    "start_date": "01-Jan-2026",
+    "end_date": "31-Dec-2026",
+    "phone": "98XXXX1234",
+    "mobile": "98XXXX1234",
+    "phone_number": "98XXXX1234",
+    "jeweller_name": "Shree Jewellers",
+    "shop_name": "Shree Jewellers",
+    "business_name": "Shree Jewellers",
+    "otp": "123456",
+    "code": "123456",
+    "month": "January",
+    "year": "2026",
+    "plan_name": "Gold SIP Monthly",
+    "scheme_name": "Gold SIP Monthly",
+    "installment_number": "5",
+    "total_installments": "12",
+    "weight": "10g",
+    "gold_weight": "10g",
+    "rate": "\u20b97,200/g",
+}
+
+
+def generate_dummy_values(variable_names_csv: Optional[str]) -> Dict[str, str]:
+    """
+    Generate dummy values for template variables based on variable names.
+
+    Args:
+        variable_names_csv: Comma-separated variable names (e.g. "customer_name,amount")
+
+    Returns:
+        Dict mapping each variable name to a human-readable dummy value.
+    """
+    if not variable_names_csv:
+        return {}
+
+    result: Dict[str, str] = {}
+    for var_name in variable_names_csv.split(","):
+        var_name = var_name.strip()
+        if not var_name:
+            continue
+        result[var_name] = _DUMMY_VALUE_MAP.get(var_name.lower(), f"Sample_{var_name}")
+
+    return result
+
+
+def render_text_with_variables(
+    text: Optional[str],
+    variable_names: List[str],
+    values: Dict[str, str],
+) -> Optional[str]:
+    """
+    Replace {{1}}, {{2}}, ... placeholders in text with provided values.
+
+    Args:
+        text: Template text with {{N}} placeholders.
+        variable_names: Ordered list of variable names.
+        values: Dict mapping variable name -> replacement value.
+
+    Returns:
+        Rendered text, or None if input text is None.
+    """
+    if text is None:
+        return None
+
+    rendered = text
+    for idx, var_name in enumerate(variable_names, 1):
+        placeholder = f"{{{{{idx}}}}}"  # {{1}}, {{2}}, etc.
+        rendered = rendered.replace(placeholder, values.get(var_name.strip(), ""))
+
+    return rendered
+
+
 class TemplateService:
     """
     Service for managing WhatsApp templates

@@ -16,19 +16,6 @@
 
 
 
-  <!-- space added  -->
-  <!-- Unregister service worker temporarily for testing -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function(registrations) {
-        for(let registration of registrations) {
-          registration.unregister();
-          console.log('Service Worker unregistered');
-        }
-      });
-    }
-  </script>
-
   <!-- Facebook SDK for WhatsApp Embedded Signup -->
   <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
   <script>
@@ -769,8 +756,8 @@
       <div class="nav-links">
         <a href="/dashboard.html" class="nav-link active">Dashboard</a>
         <a href="/contacts.html" class="nav-link">Contacts</a>
-        <a href="/campaigns.html" class="nav-link">Campaigns</a>
-        <a href="/templates.html" class="nav-link">Templates</a>
+        <button class="nav-link" id="navCampaignsBtn" style="background:none;border:none;cursor:pointer;font:inherit;">Campaigns</button>
+        <button class="nav-link" id="navTemplatesBtn" style="background:none;border:none;cursor:pointer;font:inherit;">Templates</button>
       </div>
       <div class="nav-actions">
         <button class="btn btn-secondary" id="profileBtn">
@@ -795,7 +782,7 @@
         <button class="btn btn-secondary" onclick="window.location.href='/contacts.html'">
           📤 Upload Contacts
         </button>
-        <button class="btn btn-primary" onclick="window.location.href='/campaigns.html'">
+        <button class="btn btn-primary" id="newCampaignBtn">
           ➕ New Campaign
         </button>
       </div>
@@ -1053,8 +1040,31 @@
     </div>
   </div>
 
+  <!-- WIP Modal -->
+  <div id="wipModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:12px;padding:40px 36px;max-width:360px;width:90%;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.2);">
+      <div style="font-size:52px;margin-bottom:14px;">🚧</div>
+      <h3 style="margin:0 0 10px;font-size:18px;font-weight:700;color:#1f2937;">Work in Progress</h3>
+      <p style="margin:0 0 24px;font-size:14px;color:#6b7280;line-height:1.6;">This feature will be available soon.<br>Check back after the next update.</p>
+      <button onclick="document.getElementById('wipModal').style.display='none'" style="padding:10px 28px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">Got it</button>
+    </div>
+  </div>
+
   <!-- Load Vite TypeScript modules -->
   <script type="module" src="/src/pages/dashboard.ts"></script>
   <script type="module" src="/src/pages/whatsapp-connect.ts"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      ['navCampaignsBtn','navTemplatesBtn','newCampaignBtn'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('click', function() {
+          document.getElementById('wipModal').style.display = 'flex';
+        });
+      });
+      document.getElementById('wipModal').addEventListener('click', function(e) {
+        if (e.target === this) this.style.display = 'none';
+      });
+    });
+  </script>
 </body>
 </html>

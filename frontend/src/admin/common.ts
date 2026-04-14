@@ -394,6 +394,10 @@ export class AdminNavigation {
                         <span class="nav-icon">📈</span>
                         Analytics
                     </a>
+                    <a href="/admin/templates.html" class="admin-nav-item ${this.activePage === 'templates' ? 'active' : ''}">
+                        <span class="nav-icon">📋</span>
+                        Templates
+                    </a>
                 </nav>
                 <div class="admin-nav-footer">
                     <button id="admin-logout" class="btn btn-secondary btn-block">

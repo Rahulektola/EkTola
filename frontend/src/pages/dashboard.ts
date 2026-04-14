@@ -446,7 +446,6 @@ function closeAdminPermissionModal(): void {
 }
 
 function grantAdminPermission(): void {
-  alert('Admin permission feature coming soon!');
   closeAdminPermissionModal();
 }
 
@@ -491,7 +490,7 @@ document.getElementById('logoutBtn')?.addEventListener('click', () => {
 
 // Profile
 document.getElementById('profileBtn')?.addEventListener('click', () => {
-  alert('Profile page coming soon!');
+  window.location.href = '/profile.html';
 });
 
 // Impersonation Banner

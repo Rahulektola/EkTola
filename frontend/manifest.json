@@ -72,10 +72,10 @@
       ]
     },
     {
-      "name": "New Campaign",
-      "short_name": "Campaign",
-      "description": "Create new campaign",
-      "url": "/campaigns/new.html",
+      "name": "Contacts",
+      "short_name": "Contacts",
+      "description": "Manage your contacts",
+      "url": "/contacts.html",
       "icons": [
         {
           "src": "/icon-96.png",

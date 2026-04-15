@@ -36,10 +36,6 @@ logger = logging.getLogger(__name__)
 
 _DUMMY_VALUE_MAP: Dict[str, str] = {
     "customer_name": "Rahul",
-    "name": "Rahul",
-    "first_name": "Rahul",
-    "last_name": "Sharma",
-    "full_name": "Rahul Sharma",
     "amount": "\u20b95,000",
     "loan_amount": "\u20b950,000",
     "sip_amount": "\u20b95,000",
@@ -48,8 +44,8 @@ _DUMMY_VALUE_MAP: Dict[str, str] = {
     "date": "15-Jan-2026",
     "due_date": "15-Jan-2026",
     "payment_date": "15-Jan-2026",
-    "start_date": "01-Jan-2026",
-    "end_date": "31-Dec-2026",
+    "start_date": "01-01-2026",
+    "expiry_date": "31-11-2026",
     "phone": "98XXXX1234",
     "mobile": "98XXXX1234",
     "phone_number": "98XXXX1234",
@@ -58,6 +54,7 @@ _DUMMY_VALUE_MAP: Dict[str, str] = {
     "business_name": "Shree Jewellers",
     "otp": "123456",
     "code": "123456",
+    "discount": "20",
     "month": "January",
     "year": "2026",
     "plan_name": "Gold SIP Monthly",
@@ -68,16 +65,9 @@ _DUMMY_VALUE_MAP: Dict[str, str] = {
     "gold_weight": "10g",
     "rate": "\u20b97,200/g",
     # Generic positional names (auto-generated during WhatsApp sync)
-    "header_param_1": "Rahul",
-    "header_param_2": "Shree Jewellers",
-    "body_param_1": "Rahul",
-    "body_param_2": "\u20b95,000",
-    "body_param_3": "15-Jan-2026",
-    "body_param_4": "Gold SIP Monthly",
-    "body_param_5": "5",
-    "body_param_6": "12",
-    "body_param_7": "10g",
-    "body_param_8": "\u20b97,200/g",
+    "header_param_1": "Rahul",    
+    "body_param_1": "Shree Jewellers",
+    "body_param_2": "April",
 }
 
 

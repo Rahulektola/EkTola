@@ -88,7 +88,28 @@ document.addEventListener('DOMContentLoaded', () => {
     setupFilters();
     setupPreviewModal();
     loadTemplates();
+    setupImpersonationBanner();
 });
+
+function setupImpersonationBanner(): void {
+  const banner = document.getElementById('impersonation-banner');
+  const exitBtn = document.getElementById('exit-impersonation');
+  const jewellerNameSpan = document.getElementById('impersonation-text');
+  if (!banner || !exitBtn || !jewellerNameSpan) return;
+  if (authService.isImpersonating()) {
+    const jeweller = authService.getImpersonatedJewellerInfo();
+    if (jeweller) {
+      jewellerNameSpan.textContent = `Viewing as ${jeweller.name}`;
+      banner.style.display = 'flex';
+    }
+    exitBtn.addEventListener('click', () => {
+      authService.exitImpersonation();
+      window.location.href = '/admin/dashboard.html';
+    });
+  } else {
+    banner.style.display = 'none';
+  }
+}
 
 // ─── Logout ───────────────────────────────────────────────────────────────────
 

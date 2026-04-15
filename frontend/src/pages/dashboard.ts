@@ -510,7 +510,7 @@ function setupImpersonationBanner(): void {
     
     if (jeweller) {
       jewellerNameSpan.textContent = `Viewing as ${jeweller.name}`;
-      banner.style.display = 'block';
+      banner.style.display = 'flex';
     }
     
     exitBtn.addEventListener('click', () => {

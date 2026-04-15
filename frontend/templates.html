@@ -344,5 +344,11 @@
   </div>
 
   <script type="module" src="/src/pages/templates.ts"></script>
+
+  <!-- Impersonation Badge (shown only when admin is viewing as jeweller) -->
+  <div id="impersonation-banner" style="display: none; position: fixed; bottom: 80px; right: 16px; z-index: 10000; background: #dc2626; color: white; padding: 38px 54px; border-radius: 10px; font-size: 19px; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,0.25); align-items: center; gap: 10px;">
+    <span id="impersonation-text">👁 Admin View</span>
+    <button id="exit-impersonation" style="background: white; color: #dc2626; border: none; padding: 3px 10px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 20px;">Exit</button>
+  </div>
 </body>
 </html>

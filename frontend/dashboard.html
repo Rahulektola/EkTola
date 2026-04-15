@@ -713,6 +713,54 @@
       }
     }
 
+    /* Mobile footer bar */
+    .mobile-footer-bar {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 62px;
+      background: white;
+      border-top: 1px solid var(--border-color);
+      align-items: center;
+      justify-content: space-around;
+      z-index: 999;
+      padding: 0 4px;
+      box-shadow: 0 -2px 12px rgba(0,0,0,0.08);
+    }
+
+    .footer-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 6px 12px;
+      border-radius: 10px;
+      color: var(--text-color);
+      transition: background 0.15s;
+      flex: 1;
+    }
+
+    .footer-btn:hover,
+    .footer-btn:active {
+      background: var(--bg-light);
+    }
+
+    .footer-btn .footer-icon {
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .footer-btn .footer-label {
+      font-size: 10px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
     /* Mobile profile icon dropdown */
     .nav-actions-mobile {
       display: none;
@@ -811,6 +859,14 @@
 
       .quick-actions {
         grid-template-columns: 1fr;
+      }
+
+      .dashboard-container {
+        padding-bottom: 72px;
+      }
+
+      .mobile-footer-bar {
+        display: flex;
       }
     }
   </style>
@@ -918,7 +974,7 @@
     </div>
 
     <!-- WhatsApp Connection Status -->
-    <div class="card" style="margin-bottom: 24px; border: 2px solid #25D366;">
+    <div id="section-whatsapp" class="card" style="margin-bottom: 24px; border: 2px solid #25D366;">
       <div class="card-header" style="background: linear-gradient(135deg, #25D366 0%, #128C7E 100%); color: white; border-radius: 12px 12px 0 0;">
         <h2 class="card-title" style="color: white;"><img src="/whatsapp-logo.png" alt="WhatsApp" width="24" height="24" style="vertical-align: middle; margin-right: 8px; border-radius: 4px;"> WhatsApp Business Connection</h2>
       </div>
@@ -996,7 +1052,7 @@
     </div>
 
     <!-- Upload Options -->
-    <div class="card">
+    <div id="section-upload" class="card">
       <div class="card-header">
         <h2 class="card-title">📥 Upload Contacts (3 Ways)</h2>
       </div>
@@ -1137,6 +1193,26 @@
   </div>
 
   <!-- Load Vite TypeScript modules -->
+  <!-- Mobile Footer Navigation Bar -->
+  <div class="mobile-footer-bar" id="mobileFooterBar">
+    <button class="footer-btn" id="footerContactsBtn">
+      <span class="footer-icon">👥</span>
+      <span class="footer-label">Contacts</span>
+    </button>
+    <button class="footer-btn" id="footerWhatsappBtn">
+      <span class="footer-icon">📲</span>
+      <span class="footer-label">Connect</span>
+    </button>
+    <button class="footer-btn" id="footerUploadBtn">
+      <span class="footer-icon">📥</span>
+      <span class="footer-label">Upload</span>
+    </button>
+    <button class="footer-btn" id="footerCampaignsBtn">
+      <span class="footer-icon">📣</span>
+      <span class="footer-label">Campaigns</span>
+    </button>
+  </div>
+
   <script type="module" src="/src/pages/dashboard.ts"></script>
   <script type="module" src="/src/pages/whatsapp-connect.ts"></script>
   <script>
@@ -1149,6 +1225,20 @@
       });
       document.getElementById('wipModal').addEventListener('click', function(e) {
         if (e.target === this) this.style.display = 'none';
+      });
+
+      // Mobile footer bar handlers
+      document.getElementById('footerContactsBtn').addEventListener('click', function() {
+        window.location.href = '/contacts.html';
+      });
+      document.getElementById('footerWhatsappBtn').addEventListener('click', function() {
+        document.getElementById('section-whatsapp').scrollIntoView({ behavior: 'smooth' });
+      });
+      document.getElementById('footerUploadBtn').addEventListener('click', function() {
+        document.getElementById('section-upload').scrollIntoView({ behavior: 'smooth' });
+      });
+      document.getElementById('footerCampaignsBtn').addEventListener('click', function() {
+        document.getElementById('wipModal').style.display = 'flex';
       });
     });
   </script>

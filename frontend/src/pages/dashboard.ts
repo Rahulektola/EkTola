@@ -493,6 +493,28 @@ document.getElementById('profileBtn')?.addEventListener('click', () => {
   window.location.href = '/profile.html';
 });
 
+// Mobile profile icon dropdown
+const mobileProfileIconBtn = document.getElementById('mobileProfileIconBtn');
+const profileDropdownMenu = document.getElementById('profileDropdownMenu');
+
+mobileProfileIconBtn?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  profileDropdownMenu?.classList.toggle('open');
+});
+
+document.addEventListener('click', (e) => {
+  if (profileDropdownMenu?.classList.contains('open')) {
+    if (!profileDropdownMenu.contains(e.target as Node) && e.target !== mobileProfileIconBtn) {
+      profileDropdownMenu.classList.remove('open');
+    }
+  }
+});
+
+document.getElementById('mobileLogoutBtn')?.addEventListener('click', () => {
+  window.authService.logout();
+  window.location.href = '/index.html';
+});
+
 // Impersonation Banner
 function setupImpersonationBanner(): void {
   const banner = document.getElementById('impersonation-banner');

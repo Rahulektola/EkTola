@@ -108,6 +108,9 @@ class WhatsAppConfigResponse(BaseModel):
     configId: str
     redirectUri: str
     state: str  # Signed JWT token
+    sdkUrl: str  # Facebook SDK URL
+    apiVersion: str  # WhatsApp API version
+    embeddedSignupVersion: str  # Embedded signup flow version
 
 
 class WhatsAppCallbackRequest(BaseModel):

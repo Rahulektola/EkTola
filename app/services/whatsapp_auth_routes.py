@@ -238,6 +238,9 @@ async def get_embedded_signup_config(
         appId=settings.WHATSAPP_APP_ID,
         configId=settings.FACEBOOK_CONFIG_ID,
         redirectUri=callback_url,
+        sdkUrl=settings.FACEBOOK_SDK_URL,
+        apiVersion=settings.WHATSAPP_API_VERSION,
+        embeddedSignupVersion=settings.FACEBOOK_EMBEDDED_SIGNUP_VERSION,
         state=state_token
     )
 

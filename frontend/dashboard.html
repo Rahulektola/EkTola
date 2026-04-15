@@ -17,17 +17,54 @@
 
 
   <!-- Facebook SDK for WhatsApp Embedded Signup -->
-  <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
   <script>
-    window.fbAsyncInit = function() {
-      FB.init({
-        appId: '2416144582179119',
-        cookie: true,
-        xfbml: true,
-        version: 'v25.0'
-      });
-      console.log('[FB SDK] Initialized');
-    };
+    // Load FB SDK config from backend before initializing
+    (async function() {
+      try {
+        const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+        if (!token) {
+          console.log('[FB SDK] No auth token, skipping SDK load');
+          return;
+        }
+        
+        const response = await fetch('/api/auth/whatsapp/config', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) {
+          console.warn('[FB SDK] Could not fetch config, using defaults');
+          loadFBSDK('https://connect.facebook.net/en_US/sdk.js', null, 'v25.0');
+          return;
+        }
+        
+        const config = await response.json();
+        loadFBSDK(config.sdkUrl, config.appId, config.apiVersion);
+      } catch (error) {
+        console.error('[FB SDK] Error loading config:', error);
+        loadFBSDK('https://connect.facebook.net/en_US/sdk.js', null, 'v25.0');
+      }
+    })();
+    
+    function loadFBSDK(sdkUrl, appId, apiVersion) {
+      // Load SDK script
+      const script = document.createElement('script');
+      script.src = sdkUrl;
+      script.async = true;
+      script.defer = true;
+      script.crossOrigin = 'anonymous';
+      document.head.appendChild(script);
+      
+      // Initialize when loaded
+      window.fbAsyncInit = function() {
+        FB.init({
+          appId: appId || '2416144582179119',
+          cookie: true,
+          xfbml: true,
+          version: apiVersion || 'v25.0'
+        });
+        console.log('[FB SDK] Initialized with version', apiVersion);
+      };
+    }
   </script>
   
   <link rel="stylesheet" href="/css/style.css">

@@ -18,6 +18,9 @@ interface WhatsAppConfig {
   appId: string;
   configId: string;
   state: string;
+  sdkUrl: string;
+  apiVersion: string;
+  embeddedSignupVersion: string;
 }
 
 interface JewellerProfile {
@@ -281,6 +284,7 @@ async function launchWhatsAppSignup(): Promise<void> {
     console.log('[WhatsApp] Launching Facebook Embedded Signup...');
     console.log('[WhatsApp]   App ID:', config.appId);
     console.log('[WhatsApp]   Config ID:', config.configId);
+    console.log('[WhatsApp]   Signup Version:', config.embeddedSignupVersion);
     
     // Launch Facebook Embedded Signup
     FB.login(fbLoginCallback, {
@@ -290,7 +294,7 @@ async function launchWhatsAppSignup(): Promise<void> {
       extras: {
         featureType: 'whatsapp_business_app_onboarding',
         sessionInfoVersion: '3',
-        version: 'v3'
+        version: config.embeddedSignupVersion || 'v4'  // Use version from backend
       }
     });
     

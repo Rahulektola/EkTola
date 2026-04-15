@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     # WhatsApp Embedded Signup Settings
     WHATSAPP_TOKEN_ENCRYPTION_KEY: str = ""  # Fernet key for encrypting jeweller tokens
     FACEBOOK_CONFIG_ID: str = ""  # Facebook Embedded Signup Configuration ID
+    FACEBOOK_SDK_URL: str = "https://connect.facebook.net/en_US/sdk.js"  # Facebook SDK URL
+    FACEBOOK_EMBEDDED_SIGNUP_VERSION: str = "v4"  # Embedded signup flow version
     WHATSAPP_CALLBACK_BASE_URL: str = ""  # Base URL for OAuth callbacks (e.g., https://yourdomain.com)
     WHATSAPP_SYSTEM_USER_TOKEN: str = ""  # System User Token for token exchange
     

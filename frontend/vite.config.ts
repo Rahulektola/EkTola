@@ -37,6 +37,7 @@ export default defineConfig({
         adminAnalytics: resolve(__dirname, 'admin/analytics.html'),
         adminDeletedContacts: resolve(__dirname, 'admin/deleted-contacts.html'),
         adminTemplates: resolve(__dirname, 'admin/templates.html'),
+        adminTemplateDetail: resolve(__dirname, 'admin/template-detail.html'),
         profile: resolve(__dirname, 'profile.html'),
       },
     },

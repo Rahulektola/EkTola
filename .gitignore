@@ -80,6 +80,8 @@ celerybeat.pid
 .env.local
 .env.*.local
 .venv
+legacy.env
+new.env
 env/
 venv/
 ENV/

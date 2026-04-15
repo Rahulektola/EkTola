@@ -197,34 +197,26 @@ function renderTemplates(): void {
     }
 
     templatesTable.innerHTML = filtered.map(t => {
-        const lang = t.translations[0]?.language?.toUpperCase() ?? '—';
-        const waId = t.translations[0]?.whatsapp_template_id;
-        const status = t.translations[0]?.approval_status ?? 'Not submitted';
+        const lang = t.translations.map(tr => langLabel(tr.language)).join(', ') || '—';
+        const status = t.translations[0]?.approval_status ?? 'PENDING';
         return `
-        <tr>
+        <tr style="cursor:default;">
             <td>
-                <strong>${escapeHtml(t.template_name)}</strong>
-                <br><small style="color:#6b7280;font-size:11px;">${escapeHtml(t.display_name)}</small>
-                ${waId ? `<br><small style="color:#9ca3af;font-size:11px;">WA ID: ${escapeHtml(waId)}</small>` : ''}
+                <strong>${escapeHtml(t.display_name)}</strong>
+                <br><small style="color:#9ca3af;font-size:11px;">${escapeHtml(t.template_name)}</small>
             </td>
-            <td>
-                ${escapeHtml(t.campaign_type)}
-                ${t.sub_segment ? `<br><small style="color:#6b7280;font-size:11px;">${escapeHtml(t.sub_segment)}</small>` : ''}
-            </td>
-            <td>${lang}</td>
+            <td>${escapeHtml(t.campaign_type)}</td>
+            <td>${escapeHtml(lang)}</td>
             <td>${createStatusBadge(status)}</td>
             <td>${t.is_active
                 ? '<span style="color:#10b981;font-weight:600;">✅ Yes</span>'
                 : '<span style="color:#6b7280;">No</span>'}</td>
             <td>${formatDateOnly(t.created_at)}</td>
             <td>
-                <div class="action-buttons">
-                    <button class="btn btn-sm btn-secondary" onclick="previewTemplate(${t.id})">👁 Preview</button>
-                    <button class="btn btn-sm btn-secondary" onclick="editTemplate(${t.id})">Edit</button>
-                    <button class="btn btn-sm btn-secondary" onclick="syncTemplate(${t.id})">Sync ↑</button>
-                    <button class="btn btn-sm btn-secondary" onclick="checkStatus(${t.id})">Status</button>
-                    <button class="btn btn-sm btn-danger" onclick="deleteTemplate(${t.id}, '${escapeHtml(t.template_name)}')">Delete</button>
-                </div>
+                <a href="/admin/template-detail.html?id=${t.id}"
+                   style="display:inline-flex;align-items:center;gap:6px;padding:7px 16px;background:#6366f1;color:#fff;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap;">
+                    Enter &rarr;
+                </a>
             </td>
         </tr>`;
     }).join('');

@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 # ============ Dummy value mapping for template preview ============
 
 _DUMMY_VALUE_MAP: Dict[str, str] = {
-    "customer_name": "Rahul",
+    "customer": "Rahul",
     "amount": "\u20b95,000",
     "loan_amount": "\u20b950,000",
     "sip_amount": "\u20b95,000",
@@ -71,6 +71,25 @@ _DUMMY_VALUE_MAP: Dict[str, str] = {
 }
 
 
+def extract_variable_names_from_text(text: Optional[str]) -> List[str]:
+    """
+    Extract variable names from template text containing {{variable}} placeholders.
+    Supports both numeric ({{1}}, {{2}}) and named ({{customer}}, {{amount}}) placeholders.
+
+    Args:
+        text: Template text with {{...}} placeholders
+
+    Returns:
+        List of variable names in order of appearance
+    """
+    if not text:
+        return []
+
+    # Find all {{...}} patterns
+    matches = re.findall(r'\{\{(\w+)\}\}', text)
+    return matches
+
+
 def generate_dummy_values(variable_names_csv: Optional[str]) -> Dict[str, str]:
     """
     Generate dummy values for template variables based on variable names.
@@ -100,10 +119,11 @@ def render_text_with_variables(
     values: Dict[str, str],
 ) -> Optional[str]:
     """
-    Replace {{1}}, {{2}}, ... placeholders in text with provided values.
+    Replace placeholders in text with provided values.
+    Supports both numeric ({{1}}, {{2}}) and named ({{customer}}, {{amount}}) placeholders.
 
     Args:
-        text: Template text with {{N}} placeholders.
+        text: Template text with {{...}} placeholders.
         variable_names: Ordered list of variable names.
         values: Dict mapping variable name -> replacement value.
 
@@ -114,10 +134,23 @@ def render_text_with_variables(
         return None
 
     rendered = text
+    
+    # First, try to replace named placeholders directly
+    # This handles templates like "Hi {{customer}}, your amount is {{amount}}"
+    for var_name, value in values.items():
+        named_placeholder = f"{{{{{var_name}}}}}"
+        # Case-insensitive matching for better UX
+        if named_placeholder in rendered:
+            rendered = rendered.replace(named_placeholder, value)
+    
+    # Then, handle numeric placeholders with positional mapping
+    # This handles templates like "Hi {{1}}, your amount is {{2}}"
     for idx, var_name in enumerate(variable_names, 1):
-        placeholder = f"{{{{{idx}}}}}"  # {{1}}, {{2}}, etc.
-        rendered = rendered.replace(placeholder, values.get(var_name.strip(), ""))
-
+        numeric_placeholder = f"{{{{{idx}}}}}"  # {{1}}, {{2}}, etc.
+        if numeric_placeholder in rendered:
+            value = values.get(var_name.strip(), "")
+            rendered = rendered.replace(numeric_placeholder, value)
+    
     return rendered
 
 
@@ -190,7 +223,7 @@ class TemplateService:
                                 break
                         if not matched:
                             # Language translation doesn't exist locally — create it
-                            body_text, header_text, footer_text, _hvc, _bvc = self._extract_component_texts(
+                            body_text, header_text, footer_text, header_var_names, body_var_names = self._extract_component_texts(
                                 wa_template.get("components", [])
                             )
                             new_trans = TemplateTranslation(
@@ -206,23 +239,36 @@ class TemplateService:
                             updated_count += 1
                     else:
                         # Template doesn't exist locally — create it from WhatsApp data
-                        body_text, header_text, footer_text, header_var_count, body_var_count = self._extract_component_texts(
+                        body_text, header_text, footer_text, header_var_names, body_var_names = self._extract_component_texts(
                             wa_template.get("components", [])
                         )
 
                         # Determine campaign_type from WhatsApp category
                         campaign_type = CampaignType.MARKETING if wa_category == "MARKETING" else CampaignType.UTILITY
 
-                        # Count variable placeholders in HEADER + BODY
-                        variable_count = header_var_count + body_var_count
-
-                        # Auto-generate variable names: header params first, then body
-                        var_name_parts = []
-                        for i in range(1, header_var_count + 1):
-                            var_name_parts.append(f"header_param_{i}")
-                        for i in range(1, body_var_count + 1):
-                            var_name_parts.append(f"body_param_{i}")
-                        variable_names_csv = ",".join(var_name_parts) if var_name_parts else None
+                        # Combine header and body variable names
+                        all_var_names = []
+                        
+                        # Process header variables
+                        for idx, var_name in enumerate(header_var_names, 1):
+                            # If it's a numeric placeholder, generate descriptive name
+                            if var_name.isdigit():
+                                all_var_names.append(f"header_param_{idx}")
+                            else:
+                                # It's a named placeholder, preserve the name
+                                all_var_names.append(var_name)
+                        
+                        # Process body variables
+                        for idx, var_name in enumerate(body_var_names, 1):
+                            # If it's a numeric placeholder, generate descriptive name
+                            if var_name.isdigit():
+                                all_var_names.append(f"body_param_{idx}")
+                            else:
+                                # It's a named placeholder, preserve the name
+                                all_var_names.append(var_name)
+                        
+                        variable_count = len(all_var_names)
+                        variable_names_csv = ",".join(all_var_names) if all_var_names else None
 
                         # Build display name from template_name
                         display_name = template_name.replace("_", " ").title()
@@ -275,10 +321,11 @@ class TemplateService:
 
     @staticmethod
     def _extract_component_texts(components) -> tuple:
-        """Extract body, header, footer text from WhatsApp template components.
+        """Extract body, header, footer text and variable information from WhatsApp template components.
 
         Returns:
-            (body_text, header_text, footer_text, header_var_count, body_var_count)
+            (body_text, header_text, footer_text, header_var_names, body_var_names)
+            where var_names are lists of actual variable names found in the text
         """
         body_text = None
         header_text = None
@@ -301,9 +348,11 @@ class TemplateService:
             elif comp_type_upper == "FOOTER":
                 footer_text = comp.get("text") if isinstance(comp, dict) else getattr(comp, "text", None)
 
-        header_var_count = len(re.findall(r'\{\{\d+\}\}', header_text or ""))
-        body_var_count = len(re.findall(r'\{\{\d+\}\}', body_text or ""))
-        return body_text, header_text, footer_text, header_var_count, body_var_count
+        # Extract variable names from header and body
+        header_var_names = extract_variable_names_from_text(header_text)
+        body_var_names = extract_variable_names_from_text(body_text)
+        
+        return body_text, header_text, footer_text, header_var_names, body_var_names
     
     async def create_template_in_whatsapp(
         self,
@@ -528,15 +577,14 @@ class TemplateService:
         # Get variable names from template
         variable_names = []
         if template.variable_names:
-            variable_names = template.variable_names.split(",")
+            variable_names = [name.strip() for name in template.variable_names.split(",")]
         
-        # Render the template
-        body_text = translation.body_text
-        
-        for idx, var_name in enumerate(variable_names, 1):
-            placeholder = f"{{{{{idx}}}}}"  # {{1}}, {{2}}, etc.
-            value = variables.get(var_name.strip(), "")
-            body_text = body_text.replace(placeholder, value)
+        # Render the template using the enhanced render function
+        body_text = render_text_with_variables(
+            text=translation.body_text,
+            variable_names=variable_names,
+            values=variables
+        )
         
         return body_text
 

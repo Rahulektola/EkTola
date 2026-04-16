@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#6366f1">
   <title>Dashboard - ekTola Jeweller</title>
   
@@ -17,17 +17,54 @@
 
 
   <!-- Facebook SDK for WhatsApp Embedded Signup -->
-  <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
   <script>
-    window.fbAsyncInit = function() {
-      FB.init({
-        appId: '2416144582179119',
-        cookie: true,
-        xfbml: true,
-        version: 'v25.0'
-      });
-      console.log('[FB SDK] Initialized');
-    };
+    // Load FB SDK config from backend before initializing
+    (async function() {
+      try {
+        const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+        if (!token) {
+          console.log('[FB SDK] No auth token, skipping SDK load');
+          return;
+        }
+        
+        const response = await fetch('/api/auth/whatsapp/config', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) {
+          console.warn('[FB SDK] Could not fetch config, using defaults');
+          loadFBSDK('https://connect.facebook.net/en_US/sdk.js', null, 'v25.0');
+          return;
+        }
+        
+        const config = await response.json();
+        loadFBSDK(config.sdkUrl, config.appId, config.apiVersion);
+      } catch (error) {
+        console.error('[FB SDK] Error loading config:', error);
+        loadFBSDK('https://connect.facebook.net/en_US/sdk.js', null, 'v25.0');
+      }
+    })();
+    
+    function loadFBSDK(sdkUrl, appId, apiVersion) {
+      // Load SDK script
+      const script = document.createElement('script');
+      script.src = sdkUrl;
+      script.async = true;
+      script.defer = true;
+      script.crossOrigin = 'anonymous';
+      document.head.appendChild(script);
+      
+      // Initialize when loaded
+      window.fbAsyncInit = function() {
+        FB.init({
+          appId: appId || '2416144582179119',
+          cookie: true,
+          xfbml: true,
+          version: apiVersion || 'v25.0'
+        });
+        console.log('[FB SDK] Initialized with version', apiVersion);
+      };
+    }
   </script>
   
   <link rel="stylesheet" href="/css/style.css">
@@ -49,6 +86,7 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       background: var(--bg-light);
       color: var(--text-color);
+      overflow-x: hidden;
     }
 
     /* Navigation */
@@ -720,14 +758,16 @@
       bottom: 0;
       left: 0;
       right: 0;
-      height: 62px;
-      background: white;
-      border-top: 1px solid var(--border-color);
-      align-items: center;
+      height: calc(62px + env(safe-area-inset-bottom, 0px));
+      background: var(--primary-color, #6366f1);
+      border-top: none;
+      align-items: flex-start;
       justify-content: space-around;
       z-index: 999;
       padding: 0 4px;
-      box-shadow: 0 -2px 12px rgba(0,0,0,0.08);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      box-shadow: 0 -2px 16px rgba(99, 102, 241, 0.35);
+      box-sizing: border-box;
     }
 
     .footer-btn {
@@ -738,16 +778,18 @@
       background: none;
       border: none;
       cursor: pointer;
-      padding: 6px 12px;
+      padding: 6px 4px;
       border-radius: 10px;
-      color: var(--text-color);
-      transition: background 0.15s;
+      color: rgba(255, 255, 255, 0.7);
+      transition: background 0.15s, color 0.15s;
       flex: 1;
+      min-width: 0;
     }
 
     .footer-btn:hover,
     .footer-btn:active {
-      background: var(--bg-light);
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
     }
 
     .footer-btn .footer-icon {
@@ -759,6 +801,19 @@
       font-size: 10px;
       font-weight: 500;
       white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+
+    .footer-btn.active {
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+    }
+
+    .footer-btn.active .footer-icon,
+    .footer-btn.active .footer-label {
+      color: #fff;
     }
 
     /* Mobile profile icon dropdown */
@@ -862,7 +917,7 @@
       }
 
       .dashboard-container {
-        padding-bottom: 72px;
+        padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
       }
 
       .mobile-footer-bar {
@@ -872,11 +927,11 @@
   </style>
 </head>
 <body>
-  <!-- Impersonation Banner (shown only when admin is viewing as jeweller) -->
-  <div id="impersonation-banner" style="display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 10000; background: #dc2626; color: white; padding: 0.75rem 1rem; text-align: center; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-    <span id="impersonation-text">Viewing as Jeweller</span>
-    <button id="exit-impersonation" style="background: white; color: #dc2626; border: none; padding: 0.25rem 1rem; border-radius: 0.25rem; margin-left: 1rem; cursor: pointer; font-weight: 600;">
-      Exit Admin View
+  <!-- Impersonation Badge (shown only when admin is viewing as jeweller) -->
+  <div id="impersonation-banner" style="display: none; position: fixed; bottom: 80px; right: 16px; z-index: 10000; background: #dc2626; color: white; padding: 38px 54px; border-radius: 10px; font-size: 19px; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,0.25); display: none; align-items: center; gap: 10px;">
+    <span id="impersonation-text">👁 Admin View</span>
+    <button id="exit-impersonation" style="background: white; color: #dc2626; border: none; padding: 3px 10px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 20px;">
+      Exit
     </button>
   </div>
 
@@ -1192,20 +1247,19 @@
     </div>
   </div>
 
-  <!-- Load Vite TypeScript modules -->
   <!-- Mobile Footer Navigation Bar -->
   <div class="mobile-footer-bar" id="mobileFooterBar">
+    <button class="footer-btn active" id="footerHomeBtn">
+      <span class="footer-icon">🏠</span>
+      <span class="footer-label">Home</span>
+    </button>
     <button class="footer-btn" id="footerContactsBtn">
       <span class="footer-icon">👥</span>
       <span class="footer-label">Contacts</span>
     </button>
-    <button class="footer-btn" id="footerWhatsappBtn">
-      <span class="footer-icon">📲</span>
-      <span class="footer-label">Connect</span>
-    </button>
-    <button class="footer-btn" id="footerUploadBtn">
-      <span class="footer-icon">📥</span>
-      <span class="footer-label">Upload</span>
+    <button class="footer-btn" id="footerTemplatesBtn">
+      <span class="footer-icon">📋</span>
+      <span class="footer-label">Templates</span>
     </button>
     <button class="footer-btn" id="footerCampaignsBtn">
       <span class="footer-icon">📣</span>
@@ -1217,7 +1271,13 @@
   <script type="module" src="/src/pages/whatsapp-connect.ts"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      ['navCampaignsBtn','navTemplatesBtn','newCampaignBtn'].forEach(function(id) {
+      // Templates button navigates to the templates page
+      var templatesBtn = document.getElementById('navTemplatesBtn');
+      if (templatesBtn) templatesBtn.addEventListener('click', function() {
+        window.location.href = '/templates.html';
+      });
+      // Campaigns + New Campaign still show WIP
+      ['navCampaignsBtn','newCampaignBtn'].forEach(function(id) {
         var el = document.getElementById(id);
         if (el) el.addEventListener('click', function() {
           document.getElementById('wipModal').style.display = 'flex';
@@ -1227,15 +1287,15 @@
         if (e.target === this) this.style.display = 'none';
       });
 
-      // Mobile footer bar handlers
+      // Mobile footer nav handlers
+      document.getElementById('footerHomeBtn').addEventListener('click', function() {
+        window.location.href = '/dashboard.html';
+      });
       document.getElementById('footerContactsBtn').addEventListener('click', function() {
         window.location.href = '/contacts.html';
       });
-      document.getElementById('footerWhatsappBtn').addEventListener('click', function() {
-        document.getElementById('section-whatsapp').scrollIntoView({ behavior: 'smooth' });
-      });
-      document.getElementById('footerUploadBtn').addEventListener('click', function() {
-        document.getElementById('section-upload').scrollIntoView({ behavior: 'smooth' });
+      document.getElementById('footerTemplatesBtn').addEventListener('click', function() {
+        window.location.href = '/templates.html';
       });
       document.getElementById('footerCampaignsBtn').addEventListener('click', function() {
         document.getElementById('wipModal').style.display = 'flex';

@@ -25,6 +25,7 @@ export default defineConfig({
         register: resolve(__dirname, 'register.html'),
         dashboard: resolve(__dirname, 'dashboard.html'),
         contacts: resolve(__dirname, 'contacts.html'),
+        templates: resolve(__dirname, 'templates.html'),
         offline: resolve(__dirname, 'offline.html'),
         
         // Admin pages
@@ -36,6 +37,7 @@ export default defineConfig({
         adminAnalytics: resolve(__dirname, 'admin/analytics.html'),
         adminDeletedContacts: resolve(__dirname, 'admin/deleted-contacts.html'),
         adminTemplates: resolve(__dirname, 'admin/templates.html'),
+        adminTemplateDetail: resolve(__dirname, 'admin/template-detail.html'),
         profile: resolve(__dirname, 'profile.html'),
       },
     },

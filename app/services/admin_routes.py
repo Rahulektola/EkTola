@@ -121,8 +121,14 @@ def _build_jeweller_detail(db: Session, jeweller: Jeweller, aggregates: Dict = N
         user = db.query(User).filter(User.id == jeweller.user_id).first()
         email = user.email if user else None
     
-    # Map is_approved boolean to ApprovalStatus enum
-    approval_status = ApprovalStatus.APPROVED if jeweller.is_approved else ApprovalStatus.PENDING
+    # Map is_approved/is_active booleans to ApprovalStatus enum
+    # Convention: REJECTED = not approved AND not active
+    if jeweller.is_approved:
+        approval_status = ApprovalStatus.APPROVED
+    elif not jeweller.is_active:
+        approval_status = ApprovalStatus.REJECTED
+    else:
+        approval_status = ApprovalStatus.PENDING
 
     return JewellerDetailResponse(
         id=jeweller.id,
@@ -172,13 +178,14 @@ def list_jewellers(
     """
     query = db.query(Jeweller)
 
-    # Status filter (map enum to is_approved boolean)
+    # Status filter (map enum to is_approved/is_active booleans)
     if status_filter:
         if status_filter == ApprovalStatus.APPROVED:
             query = query.filter(Jeweller.is_approved == True)
         elif status_filter == ApprovalStatus.PENDING:
-            query = query.filter(Jeweller.is_approved == False)
-        # REJECTED not supported in current schema
+            query = query.filter(Jeweller.is_approved == False, Jeweller.is_active == True)
+        elif status_filter == ApprovalStatus.REJECTED:
+            query = query.filter(Jeweller.is_approved == False, Jeweller.is_active == False)
 
     # Search
     if q:
@@ -191,13 +198,16 @@ def list_jewellers(
         )
 
     # Status counts (unfiltered for badges)
+    # Convention: PENDING = not approved + active, REJECTED = not approved + not active
     pending_count = db.query(func.count(Jeweller.id)).filter(
-        Jeweller.is_approved == False
+        Jeweller.is_approved == False, Jeweller.is_active == True
     ).scalar() or 0
     approved_count = db.query(func.count(Jeweller.id)).filter(
         Jeweller.is_approved == True
     ).scalar() or 0
-    rejected_count = 0  # Not supported in current schema
+    rejected_count = db.query(func.count(Jeweller.id)).filter(
+        Jeweller.is_approved == False, Jeweller.is_active == False
+    ).scalar() or 0
 
     # Sort
     sort_col = getattr(Jeweller, sort_by, Jeweller.created_at)
@@ -385,6 +395,7 @@ def reject_jeweller(
     jeweller = _get_jeweller_or_404(db, jeweller_id)
 
     jeweller.is_approved = False
+    jeweller.is_active = False  # Convention: rejected = not approved + not active
     jeweller.updated_at = now_utc()
     db.commit()
     db.refresh(jeweller)

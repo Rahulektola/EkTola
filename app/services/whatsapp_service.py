@@ -752,7 +752,7 @@ class WhatsAppService:
             return []
 
         try:
-            raw_templates = await self._client.get_templates()
+            raw_templates = self._client.get_templates()
             templates = [_serialize_template(t) for t in raw_templates]
 
             if status_filter:
@@ -838,7 +838,7 @@ class WhatsAppService:
                 footer_text=footer_text,
                 buttons=buttons,
             )
-            result = await self._client.create_template(
+            result = self._client.create_template(
                 name=name,
                 category=category.upper(),
                 language=language,
@@ -891,7 +891,7 @@ class WhatsAppService:
             )
 
         try:
-            await self._client.delete_template(template_name=template_name)
+            self._client.delete_template(template_name=template_name)
             logger.info(f"Template deleted successfully via PyWa: {template_name}")
             return TemplateResult(success=True, template_name=template_name)
 

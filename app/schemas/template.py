@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict
 from datetime import datetime
 from app.utils.enums import CampaignType, SegmentType, Language
 
@@ -93,3 +93,40 @@ class TemplateListResponse(BaseModel):
     """Template list for jeweller selection"""
     templates: List[TemplateResponse]
     total: int
+
+
+# ============ Template Preview Schemas ============
+
+class TemplateTranslationPreview(BaseModel):
+    """Translation with example message rendered"""
+    id: int
+    template_id: int
+    language: Language
+    header_text: Optional[str] = None
+    body_text: str
+    footer_text: Optional[str] = None
+    approval_status: str
+    example_header: Optional[str] = None
+    example_body: str
+    example_footer: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class TemplatePreviewResponse(BaseModel):
+    """Full template preview with example messages"""
+    id: int
+    template_name: str
+    display_name: str
+    campaign_type: CampaignType
+    sub_segment: Optional[SegmentType] = None
+    description: Optional[str] = None
+    category: str
+    variable_count: int
+    variable_names: Optional[str] = None
+    dummy_values: Dict[str, str] = {}
+    translations: List[TemplateTranslationPreview] = []
+
+    class Config:
+        from_attributes = True

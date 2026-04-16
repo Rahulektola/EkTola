@@ -29,6 +29,33 @@ interface TemplateTranslation {
     approval_status: string;
 }
 
+interface TranslationPreview {
+    id: number;
+    template_id: number;
+    language: string;
+    header_text: string | null;
+    body_text: string;
+    footer_text: string | null;
+    approval_status: string;
+    example_header: string | null;
+    example_body: string;
+    example_footer: string | null;
+}
+
+interface TemplatePreviewResponse {
+    id: number;
+    template_name: string;
+    display_name: string;
+    campaign_type: string;
+    sub_segment: string | null;
+    description: string | null;
+    category: string;
+    variable_count: number;
+    variable_names: string | null;
+    dummy_values: Record<string, string>;
+    translations: TranslationPreview[];
+}
+
 interface Template {
     id: number;
     template_name: string;
@@ -95,6 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupCreateModal();
     setupStatusModal();
     setupSyncButton();
+    setupPreviewModal();
 
     loadTemplates();
 });
@@ -169,33 +197,26 @@ function renderTemplates(): void {
     }
 
     templatesTable.innerHTML = filtered.map(t => {
-        const lang = t.translations[0]?.language?.toUpperCase() ?? '—';
-        const waId = t.translations[0]?.whatsapp_template_id;
-        const status = t.translations[0]?.approval_status ?? 'Not submitted';
+        const lang = t.translations.map(tr => langLabel(tr.language)).join(', ') || '—';
+        const status = t.translations[0]?.approval_status ?? 'PENDING';
         return `
-        <tr>
+        <tr style="cursor:default;">
             <td>
-                <strong>${escapeHtml(t.template_name)}</strong>
-                <br><small style="color:#6b7280;font-size:11px;">${escapeHtml(t.display_name)}</small>
-                ${waId ? `<br><small style="color:#9ca3af;font-size:11px;">WA ID: ${escapeHtml(waId)}</small>` : ''}
+                <strong>${escapeHtml(t.display_name)}</strong>
+                <br><small style="color:#9ca3af;font-size:11px;">${escapeHtml(t.template_name)}</small>
             </td>
-            <td>
-                ${escapeHtml(t.campaign_type)}
-                ${t.sub_segment ? `<br><small style="color:#6b7280;font-size:11px;">${escapeHtml(t.sub_segment)}</small>` : ''}
-            </td>
-            <td>${lang}</td>
+            <td>${escapeHtml(t.campaign_type)}</td>
+            <td>${escapeHtml(lang)}</td>
             <td>${createStatusBadge(status)}</td>
             <td>${t.is_active
                 ? '<span style="color:#10b981;font-weight:600;">✅ Yes</span>'
                 : '<span style="color:#6b7280;">No</span>'}</td>
             <td>${formatDateOnly(t.created_at)}</td>
             <td>
-                <div class="action-buttons">
-                    <button class="btn btn-sm btn-secondary" onclick="editTemplate(${t.id})">Edit</button>
-                    <button class="btn btn-sm btn-secondary" onclick="syncTemplate(${t.id})">Sync ↑</button>
-                    <button class="btn btn-sm btn-secondary" onclick="checkStatus(${t.id})">Status</button>
-                    <button class="btn btn-sm btn-danger" onclick="deleteTemplate(${t.id}, '${escapeHtml(t.template_name)}')">Delete</button>
-                </div>
+                <a href="/admin/template-detail.html?id=${t.id}"
+                   style="display:inline-flex;align-items:center;gap:6px;padding:7px 16px;background:#6366f1;color:#fff;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap;">
+                    Enter &rarr;
+                </a>
             </td>
         </tr>`;
     }).join('');
@@ -465,6 +486,106 @@ function escapeHtml(str: string): string {
         .replace(/"/g, '&quot;');
 }
 
+const LANG_LABELS: Record<string, string> = {
+    en: 'English', hi: 'Hindi', kn: 'Kannada',
+    mr: 'Marathi', ta: 'Tamil', pa: 'Punjabi',
+};
+
+function langLabel(code: string): string {
+    return LANG_LABELS[code] ?? code.toUpperCase();
+}
+
+// ─── Preview Modal ────────────────────────────────────────────────────────────
+
+function setupPreviewModal(): void {
+    const modal = document.getElementById('previewModal')!;
+    document.getElementById('previewModalCloseBtn')?.addEventListener('click', () => { modal.style.display = 'none'; });
+    document.getElementById('previewModalDoneBtn')?.addEventListener('click', () => { modal.style.display = 'none'; });
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+}
+
+async function previewTemplate(templateId: number): Promise<void> {
+    const modal = document.getElementById('previewModal')!;
+    const title = document.getElementById('previewModalTitle')!;
+    const body = document.getElementById('previewModalBody')!;
+
+    title.textContent = 'Loading…';
+    body.innerHTML = '<p>Loading preview…</p>';
+    modal.style.display = 'flex';
+
+    try {
+        const data = await apiRequest<TemplatePreviewResponse>(
+            `/templates/admin/${templateId}/preview`,
+            authService
+        );
+        title.textContent = data.display_name;
+        renderAdminPreview(data, body);
+    } catch (error) {
+        body.innerHTML = `<p style="color:#ef4444;">${escapeHtml((error as Error).message)}</p>`;
+    }
+}
+
+function renderAdminPreview(data: TemplatePreviewResponse, container: HTMLElement): void {
+    const translations = data.translations;
+    if (translations.length === 0) {
+        container.innerHTML = '<p style="color:#6b7280;">No translations available for preview.</p>';
+        return;
+    }
+
+    // Language tabs
+    const langTabsHtml = translations.length > 1
+        ? `<div class="lang-tabs">${translations.map((t, i) =>
+            `<button class="lang-tab-btn${i === 0 ? ' active' : ''}" data-idx="${i}">${langLabel(t.language)} <small>(${t.approval_status})</small></button>`
+          ).join('')}</div>`
+        : '';
+
+    // Translation panels
+    const panels = translations.map((t, i) => `
+        <div class="tpanel" data-panel="${i}" style="${i > 0 ? 'display:none;' : ''}">
+            <div class="wa-bubble">
+                ${t.example_header ? `<div class="wa-bubble-header">${escapeHtml(t.example_header)}</div>` : ''}
+                <div>${escapeHtml(t.example_body)}</div>
+                ${t.example_footer ? `<div class="wa-bubble-footer">${escapeHtml(t.example_footer)}</div>` : ''}
+            </div>
+        </div>
+    `).join('');
+
+    // Variable chips
+    const dummyEntries = Object.entries(data.dummy_values);
+    const varsHtml = dummyEntries.length > 0
+        ? `<div class="preview-vars">
+             <h4>Variable Mapping (example values)</h4>
+             ${dummyEntries.map(([name, val]) =>
+                 `<span class="var-chip"><span class="vn">${escapeHtml(name)}</span><span class="va">→</span><span class="vv">${escapeHtml(val)}</span></span>`
+             ).join('')}
+           </div>`
+        : '';
+
+    // Details
+    const details = `
+        <div style="margin-top:16px;">
+            <div class="preview-detail"><span class="lbl">Template Name</span><span class="val">${escapeHtml(data.template_name)}</span></div>
+            <div class="preview-detail"><span class="lbl">Category</span><span class="val">${escapeHtml(data.category)}</span></div>
+            <div class="preview-detail"><span class="lbl">Campaign Type</span><span class="val">${escapeHtml(data.campaign_type)}</span></div>
+            ${data.sub_segment ? `<div class="preview-detail"><span class="lbl">Sub Segment</span><span class="val">${escapeHtml(data.sub_segment)}</span></div>` : ''}
+            <div class="preview-detail"><span class="lbl">Variables</span><span class="val">${data.variable_count}</span></div>
+        </div>`;
+
+    container.innerHTML = langTabsHtml + panels + varsHtml + details;
+
+    // Tab switching
+    container.querySelectorAll('.lang-tab-btn').forEach(tab => {
+        tab.addEventListener('click', () => {
+            container.querySelectorAll('.lang-tab-btn').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            const idx = (tab as HTMLElement).dataset.idx;
+            container.querySelectorAll('.tpanel').forEach(p => {
+                (p as HTMLElement).style.display = (p as HTMLElement).dataset.panel === idx ? '' : 'none';
+            });
+        });
+    });
+}
+
 // ─── Expose to HTML onclick handlers ─────────────────────────────────────────
 
 type WindowExtras = {
@@ -472,9 +593,11 @@ type WindowExtras = {
     syncTemplate: typeof syncTemplate;
     checkStatus: typeof checkStatus;
     deleteTemplate: typeof deleteTemplate;
+    previewTemplate: typeof previewTemplate;
 };
 
 (window as unknown as WindowExtras).editTemplate = editTemplate;
 (window as unknown as WindowExtras).syncTemplate = syncTemplate;
 (window as unknown as WindowExtras).checkStatus = checkStatus;
 (window as unknown as WindowExtras).deleteTemplate = deleteTemplate;
+(window as unknown as WindowExtras).previewTemplate = previewTemplate;

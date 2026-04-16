@@ -3,6 +3,7 @@ Template Management Service
 Synchronizes WhatsApp templates with local database
 """
 import logging
+import re
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -12,7 +13,145 @@ from app.models.template import Template, TemplateTranslation
 from app.services.whatsapp_service import whatsapp_service, TemplateResult
 from app.utils.enums import CampaignType, Language, SegmentType
 
+# Map WhatsApp language codes to local Language enum values
+_LANGUAGE_ENUM_VALUES = {lang.value for lang in Language}
+
+def _map_wa_language(wa_lang: str) -> Optional[Language]:
+    """Map a WhatsApp language code (e.g. 'en_US', 'hi') to the local Language enum."""
+    if not wa_lang:
+        return None
+    # Direct match?
+    if wa_lang in _LANGUAGE_ENUM_VALUES:
+        return Language(wa_lang)
+    # Try base code (en_US -> en)
+    base = wa_lang.split("_")[0]
+    if base in _LANGUAGE_ENUM_VALUES:
+        return Language(base)
+    return None
+
 logger = logging.getLogger(__name__)
+
+
+# ============ Dummy value mapping for template preview ============
+
+_DUMMY_VALUE_MAP: Dict[str, str] = {
+    "customer": "Rahul",
+    "amount": "\u20b95,000",
+    "loan_amount": "\u20b950,000",
+    "sip_amount": "\u20b95,000",
+    "payment_amount": "\u20b95,000",
+    "due_amount": "\u20b95,000",
+    "date": "15-Jan-2026",
+    "due_date": "15-Jan-2026",
+    "payment_date": "15-Jan-2026",
+    "start_date": "01-01-2026",
+    "expiry_date": "31-11-2026",
+    "phone": "98XXXX1234",
+    "mobile": "98XXXX1234",
+    "phone_number": "98XXXX1234",
+    "jeweller_name": "Shree Jewellers",
+    "shop_name": "Shree Jewellers",
+    "business_name": "Shree Jewellers",
+    "otp": "123456",
+    "code": "123456",
+    "discount": "20",
+    "month": "January",
+    "year": "2026",
+    "plan_name": "Gold SIP Monthly",
+    "scheme_name": "Gold SIP Monthly",
+    "installment_number": "5",
+    "total_installments": "12",
+    "weight": "10g",
+    "gold_weight": "10g",
+    "rate": "\u20b97,200/g",
+    # Generic positional names (auto-generated during WhatsApp sync)
+    "header_param_1": "Rahul",    
+    "body_param_1": "Shree Jewellers",
+    "body_param_2": "April",
+}
+
+
+def extract_variable_names_from_text(text: Optional[str]) -> List[str]:
+    """
+    Extract variable names from template text containing {{variable}} placeholders.
+    Supports both numeric ({{1}}, {{2}}) and named ({{customer}}, {{amount}}) placeholders.
+
+    Args:
+        text: Template text with {{...}} placeholders
+
+    Returns:
+        List of variable names in order of appearance
+    """
+    if not text:
+        return []
+
+    # Find all {{...}} patterns
+    matches = re.findall(r'\{\{(\w+)\}\}', text)
+    return matches
+
+
+def generate_dummy_values(variable_names_csv: Optional[str]) -> Dict[str, str]:
+    """
+    Generate dummy values for template variables based on variable names.
+
+    Args:
+        variable_names_csv: Comma-separated variable names (e.g. "customer_name,amount")
+
+    Returns:
+        Dict mapping each variable name to a human-readable dummy value.
+    """
+    if not variable_names_csv:
+        return {}
+
+    result: Dict[str, str] = {}
+    for var_name in variable_names_csv.split(","):
+        var_name = var_name.strip()
+        if not var_name:
+            continue
+        result[var_name] = _DUMMY_VALUE_MAP.get(var_name.lower(), f"Sample_{var_name}")
+
+    return result
+
+
+def render_text_with_variables(
+    text: Optional[str],
+    variable_names: List[str],
+    values: Dict[str, str],
+) -> Optional[str]:
+    """
+    Replace placeholders in text with provided values.
+    Supports both numeric ({{1}}, {{2}}) and named ({{customer}}, {{amount}}) placeholders.
+
+    Args:
+        text: Template text with {{...}} placeholders.
+        variable_names: Ordered list of variable names.
+        values: Dict mapping variable name -> replacement value.
+
+    Returns:
+        Rendered text, or None if input text is None.
+    """
+    if text is None:
+        return None
+
+    rendered = text
+    
+    # First, try to replace named placeholders directly
+    # This handles templates like "Hi {{customer}}, your amount is {{amount}}"
+    for var_name, value in values.items():
+        named_placeholder = f"{{{{{var_name}}}}}"
+        # Case-insensitive matching for better UX
+        if named_placeholder in rendered:
+            rendered = rendered.replace(named_placeholder, value)
+    
+    # Then, handle numeric placeholders with positional mapping
+    # This handles templates like "Hi {{1}}, your amount is {{2}}"
+    for idx, var_name in enumerate(variable_names, 1):
+        numeric_placeholder = f"{{{{{idx}}}}}"  # {{1}}, {{2}}, etc.
+        if numeric_placeholder in rendered:
+            value = values.get(var_name.strip(), "")
+            rendered = rendered.replace(numeric_placeholder, value)
+    
+    return rendered
 
 
 class TemplateService:
@@ -26,7 +165,8 @@ class TemplateService:
     
     async def sync_templates_from_whatsapp(self) -> Dict[str, Any]:
         """
-        Fetch templates from WhatsApp and sync with local database
+        Fetch templates from WhatsApp and sync with local database.
+        Creates new local records for templates that don't exist yet.
         
         Returns:
             Dict with sync results (created, updated, skipped counts)
@@ -52,7 +192,18 @@ class TemplateService:
             
             for wa_template in wa_templates:
                 template_name = wa_template.get("name")
-                
+                wa_language_raw = wa_template.get("language")
+                wa_status = wa_template.get("status", "PENDING")
+                wa_category = wa_template.get("category", "UTILITY")
+                wa_id = wa_template.get("id")
+
+                # Map WhatsApp language to local enum
+                local_lang = _map_wa_language(wa_language_raw)
+                if local_lang is None:
+                    logger.warning(f"Skipping template {template_name}: unsupported language '{wa_language_raw}'")
+                    skipped_count += 1
+                    continue
+
                 try:
                     # Check if template exists in database
                     existing = self.db.query(Template).filter(
@@ -60,21 +211,97 @@ class TemplateService:
                     ).first()
                     
                     if existing:
-                        # Update existing template translation status
+                        # Update or add translation
+                        matched = False
                         for translation in existing.translations:
-                            if translation.language.value == wa_template.get("language"):
-                                translation.whatsapp_template_id = wa_template.get("id")
-                                translation.approval_status = wa_template.get("status", "PENDING")
+                            if translation.language == local_lang:
+                                translation.whatsapp_template_id = wa_id
+                                translation.approval_status = wa_status
                                 translation.updated_at = datetime.utcnow()
+                                matched = True
                                 updated_count += 1
+                                break
+                        if not matched:
+                            # Language translation doesn't exist locally — create it
+                            body_text, header_text, footer_text, header_var_names, body_var_names = self._extract_component_texts(
+                                wa_template.get("components", [])
+                            )
+                            new_trans = TemplateTranslation(
+                                template_id=existing.id,
+                                language=local_lang,
+                                body_text=body_text or template_name,
+                                header_text=header_text,
+                                footer_text=footer_text,
+                                whatsapp_template_id=wa_id,
+                                approval_status=wa_status,
+                            )
+                            self.db.add(new_trans)
+                            updated_count += 1
                     else:
-                        # Template doesn't exist locally, skip (admin should create it)
-                        skipped_count += 1
-                        logger.info(f"Skipping template {template_name} - not found in local database")
+                        # Template doesn't exist locally — create it from WhatsApp data
+                        body_text, header_text, footer_text, header_var_names, body_var_names = self._extract_component_texts(
+                            wa_template.get("components", [])
+                        )
+
+                        # Determine campaign_type from WhatsApp category
+                        campaign_type = CampaignType.MARKETING if wa_category == "MARKETING" else CampaignType.UTILITY
+
+                        # Combine header and body variable names
+                        all_var_names = []
+                        
+                        # Process header variables
+                        for idx, var_name in enumerate(header_var_names, 1):
+                            # If it's a numeric placeholder, generate descriptive name
+                            if var_name.isdigit():
+                                all_var_names.append(f"header_param_{idx}")
+                            else:
+                                # It's a named placeholder, preserve the name
+                                all_var_names.append(var_name)
+                        
+                        # Process body variables
+                        for idx, var_name in enumerate(body_var_names, 1):
+                            # If it's a numeric placeholder, generate descriptive name
+                            if var_name.isdigit():
+                                all_var_names.append(f"body_param_{idx}")
+                            else:
+                                # It's a named placeholder, preserve the name
+                                all_var_names.append(var_name)
+                        
+                        variable_count = len(all_var_names)
+                        variable_names_csv = ",".join(all_var_names) if all_var_names else None
+
+                        # Build display name from template_name
+                        display_name = template_name.replace("_", " ").title()
+
+                        new_template = Template(
+                            template_name=template_name,
+                            display_name=display_name,
+                            campaign_type=campaign_type,
+                            category=wa_category,
+                            variable_count=variable_count,
+                            variable_names=variable_names_csv,
+                            is_active=True,
+                        )
+                        self.db.add(new_template)
+                        self.db.flush()  # Get new_template.id
+
+                        new_trans = TemplateTranslation(
+                            template_id=new_template.id,
+                            language=local_lang,
+                            body_text=body_text or template_name,
+                            header_text=header_text,
+                            footer_text=footer_text,
+                            whatsapp_template_id=wa_id,
+                            approval_status=wa_status,
+                        )
+                        self.db.add(new_trans)
+                        created_count += 1
+                        logger.info(f"Created template {template_name} from WhatsApp ({local_lang.value}, {wa_status})")
                     
                 except Exception as e:
                     logger.error(f"Error processing template {template_name}: {e}")
                     errors.append({"template": template_name, "error": str(e)})
+                    self.db.rollback()
             
             self.db.commit()
             
@@ -92,6 +319,41 @@ class TemplateService:
                 "success": False,
                 "error": str(e),
             }
+
+    @staticmethod
+    def _extract_component_texts(components) -> tuple:
+        """Extract body, header, footer text and variable information from WhatsApp template components.
+
+        Returns:
+            (body_text, header_text, footer_text, header_var_names, body_var_names)
+            where var_names are lists of actual variable names found in the text
+        """
+        body_text = None
+        header_text = None
+        footer_text = None
+        for comp in (components or []):
+            comp_type = None
+            if isinstance(comp, dict):
+                comp_type = comp.get("type", "")
+            else:
+                comp_type = getattr(comp, "type", "")
+                if hasattr(comp_type, "value"):
+                    comp_type = comp_type.value
+
+            comp_type_upper = str(comp_type).upper()
+
+            if comp_type_upper == "BODY":
+                body_text = comp.get("text") if isinstance(comp, dict) else getattr(comp, "text", None)
+            elif comp_type_upper == "HEADER":
+                header_text = comp.get("text") if isinstance(comp, dict) else getattr(comp, "text", None)
+            elif comp_type_upper == "FOOTER":
+                footer_text = comp.get("text") if isinstance(comp, dict) else getattr(comp, "text", None)
+
+        # Extract variable names from header and body
+        header_var_names = extract_variable_names_from_text(header_text)
+        body_var_names = extract_variable_names_from_text(body_text)
+        
+        return body_text, header_text, footer_text, header_var_names, body_var_names
     
     async def create_template_in_whatsapp(
         self,
@@ -316,15 +578,14 @@ class TemplateService:
         # Get variable names from template
         variable_names = []
         if template.variable_names:
-            variable_names = template.variable_names.split(",")
+            variable_names = [name.strip() for name in template.variable_names.split(",")]
         
-        # Render the template
-        body_text = translation.body_text
-        
-        for idx, var_name in enumerate(variable_names, 1):
-            placeholder = f"{{{{{idx}}}}}"  # {{1}}, {{2}}, etc.
-            value = variables.get(var_name.strip(), "")
-            body_text = body_text.replace(placeholder, value)
+        # Render the template using the enhanced render function
+        body_text = render_text_with_variables(
+            text=translation.body_text,
+            variable_names=variable_names,
+            values=variables
+        )
         
         return body_text
 

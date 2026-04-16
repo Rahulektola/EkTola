@@ -136,3 +136,25 @@ function formatDate(isoString: string | null): string {
 
 // Kick off on load
 loadProfile();
+
+// Impersonation badge
+function setupImpersonationBanner(): void {
+  const banner = document.getElementById('impersonation-banner');
+  const exitBtn = document.getElementById('exit-impersonation');
+  const jewellerNameSpan = document.getElementById('impersonation-text');
+  if (!banner || !exitBtn || !jewellerNameSpan) return;
+  if (window.authService.isImpersonating()) {
+    const jeweller = window.authService.getImpersonatedJewellerInfo();
+    if (jeweller) {
+      jewellerNameSpan.textContent = `Viewing as ${jeweller.name}`;
+      banner.style.display = 'flex';
+    }
+    exitBtn.addEventListener('click', () => {
+      window.authService.exitImpersonation();
+      window.location.href = '/admin/dashboard.html';
+    });
+  } else {
+    banner.style.display = 'none';
+  }
+}
+setupImpersonationBanner();

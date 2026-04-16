@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#6366f1">
   <title>My Profile - ekTola Jeweller</title>
   <link rel="stylesheet" href="/css/style.css">
@@ -24,6 +24,7 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       background: var(--bg-light);
       color: var(--text-color);
+      overflow-x: hidden;
     }
 
     .navbar {
@@ -254,10 +255,76 @@
       margin-bottom: 16px;
     }
 
+    /* Mobile footer nav bar */
+    .mobile-footer-bar {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: calc(62px + env(safe-area-inset-bottom, 0px));
+      background: var(--primary-color, #6366f1);
+      border-top: none;
+      align-items: flex-start;
+      justify-content: space-around;
+      z-index: 999;
+      padding: 0 4px;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      box-shadow: 0 -2px 16px rgba(99, 102, 241, 0.35);
+      box-sizing: border-box;
+    }
+
+    .footer-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 6px 4px;
+      border-radius: 10px;
+      color: rgba(255, 255, 255, 0.7);
+      transition: background 0.15s, color 0.15s;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .footer-btn:hover,
+    .footer-btn:active {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+    }
+
+    .footer-btn .footer-icon {
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .footer-btn .footer-label {
+      font-size: 10px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+
+    .footer-btn.active {
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+    }
+
+    .footer-btn.active .footer-icon,
+    .footer-btn.active .footer-label {
+      color: #fff;
+    }
+
     @media (max-width: 768px) {
       .nav-links { display: none; }
       .profile-card { padding: 20px; }
-      .page-container { margin-top: 24px; }
+      .page-container { margin-top: 24px; padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
+      .mobile-footer-bar { display: flex; }
     }
   </style>
 </head>
@@ -272,7 +339,7 @@
       <div class="nav-links">
         <a href="/dashboard.html" class="nav-link">Dashboard</a>
         <a href="/contacts.html" class="nav-link">Contacts</a>
-        <a href="/campaigns.html" class="nav-link">Campaigns</a>
+        <a class="nav-link" style="cursor:pointer;" onclick="document.getElementById('wipModal').style.display='flex'">Campaigns</a>
         <a href="/templates.html" class="nav-link">Templates</a>
       </div>
       <div class="nav-actions">
@@ -356,5 +423,46 @@
   </div>
 
   <script type="module" src="/src/pages/profile.ts"></script>
+
+  <!-- Work in Progress Modal -->
+  <div id="wipModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:12px;padding:40px 36px;max-width:360px;width:90%;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.2);">
+      <div style="font-size:52px;margin-bottom:14px;">🚧</div>
+      <h3 style="margin:0 0 10px;font-size:18px;font-weight:700;color:#1f2937;">Work in Progress</h3>
+      <p style="margin:0 0 24px;font-size:14px;color:#6b7280;line-height:1.6;">This feature will be available soon.<br>Check back after the next update.</p>
+      <button onclick="document.getElementById('wipModal').style.display='none'" style="padding:10px 28px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">Got it</button>
+    </div>
+  </div>
+  <script>
+    document.getElementById('wipModal').addEventListener('click', function(e) {
+      if (e.target === this) this.style.display = 'none';
+    });
+  </script>
+
+  <!-- Impersonation Badge (shown only when admin is viewing as jeweller) -->
+  <div id="impersonation-banner" style="display: none; position: fixed; bottom: 80px; right: 16px; z-index: 10000; background: #dc2626; color: white; padding: 38px 54px; border-radius: 10px; font-size: 19px; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,0.25); align-items: center; gap: 10px;">
+    <span id="impersonation-text">👁 Admin View</span>
+    <button id="exit-impersonation" style="background: white; color: #dc2626; border: none; padding: 3px 10px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 20px;">Exit</button>
+  </div>
+
+  <!-- Mobile Footer Navigation Bar -->
+  <div class="mobile-footer-bar">
+    <button class="footer-btn" onclick="window.location.href='/dashboard.html'">
+      <span class="footer-icon">🏠</span>
+      <span class="footer-label">Home</span>
+    </button>
+    <button class="footer-btn" onclick="window.location.href='/contacts.html'">
+      <span class="footer-icon">👥</span>
+      <span class="footer-label">Contacts</span>
+    </button>
+    <button class="footer-btn" onclick="window.location.href='/templates.html'">
+      <span class="footer-icon">📋</span>
+      <span class="footer-label">Templates</span>
+    </button>
+    <button class="footer-btn" onclick="document.getElementById('wipModal').style.display='flex'">
+      <span class="footer-icon">📣</span>
+      <span class="footer-label">Campaigns</span>
+    </button>
+  </div>
 </body>
 </html>

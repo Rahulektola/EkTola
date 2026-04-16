@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#6366f1">
   <title>Contacts - ekTola Jeweller</title>
 
@@ -20,6 +20,8 @@
       --border-color: #e5e7eb;
       --bg-light: #f9fafb;
     }
+
+    html { overflow-x: hidden; }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -46,6 +48,13 @@
       justify-content: space-between;
       height: 64px;
       gap: 20px;
+    }
+
+    @media (max-width: 768px) {
+      .nav-content {
+        justify-content: flex-start;
+        padding: 0 16px;
+      }
     }
 
     .nav-brand h2 {
@@ -1034,8 +1043,82 @@
     }
 
     /* Responsive */
+    /* Mobile footer nav bar */
+    .mobile-footer-bar {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: calc(62px + env(safe-area-inset-bottom, 0px));
+      background: var(--primary-color, #6366f1);
+      border-top: none;
+      align-items: flex-start;
+      justify-content: space-around;
+      z-index: 999;
+      padding: 0 4px;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      box-shadow: 0 -2px 16px rgba(99, 102, 241, 0.35);
+      box-sizing: border-box;
+    }
+
+    .footer-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 6px 4px;
+      border-radius: 10px;
+      color: rgba(255, 255, 255, 0.7);
+      transition: background 0.15s, color 0.15s;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .footer-btn:hover,
+    .footer-btn:active {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+    }
+
+    .footer-btn .footer-icon {
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .footer-btn .footer-label {
+      font-size: 10px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+
+    .footer-btn.active {
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+    }
+
+    .footer-btn.active .footer-icon,
+    .footer-btn.active .footer-label {
+      color: #fff;
+    }
+
     @media (max-width: 768px) {
+      .nav-content {
+        justify-content: flex-start;
+        padding: 0 16px;
+      }
+
       .nav-links {
+        display: none;
+      }
+
+      .nav-actions {
         display: none;
       }
 
@@ -1061,6 +1144,14 @@
         flex-direction: column;
         align-items: center;
       }
+
+      .page-container {
+        padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+      }
+
+      .mobile-footer-bar {
+        display: flex;
+      }
     }
   </style>
 </head>
@@ -1074,8 +1165,8 @@
       <div class="nav-links">
         <a href="/dashboard.html" class="nav-link">Dashboard</a>
         <a href="/contacts.html" class="nav-link active">Contacts</a>
-        <a class="nav-link" style="cursor:pointer;" onclick="document.getElementById('wipModal').style.display='flex'">Campaigns</a>
-        <a class="nav-link" style="cursor:pointer;" onclick="document.getElementById('wipModal').style.display='flex'">Templates</a>
+        <a href="/campaigns.html" class="nav-link">Campaigns</a>
+        <a href="/templates.html" class="nav-link">Templates</a>
       </div>
       <div class="nav-actions">
         <button class="btn btn-secondary" onclick="window.location.href='/profile.html'">
@@ -1569,7 +1660,27 @@
 
   <script type="module" src="/src/pages/contacts.ts"></script>
 
-  <!-- Work in Progress Modal -->
+  <!-- Mobile Footer Navigation Bar -->
+  <div class="mobile-footer-bar">
+    <button class="footer-btn" onclick="window.location.href='/dashboard.html'">
+      <span class="footer-icon">🏠</span>
+      <span class="footer-label">Home</span>
+    </button>
+    <button class="footer-btn active">
+      <span class="footer-icon">👥</span>
+      <span class="footer-label">Contacts</span>
+    </button>
+    <button class="footer-btn" onclick="window.location.href='/templates.html'">
+      <span class="footer-icon">📋</span>
+      <span class="footer-label">Templates</span>
+    </button>
+    <button class="footer-btn" onclick="document.getElementById('wipModal').style.display='flex'">
+      <span class="footer-icon">📣</span>
+      <span class="footer-label">Campaigns</span>
+    </button>
+  </div>
+
+  <!-- WIP Modal -->
   <div id="wipModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;">
     <div style="background:#fff;border-radius:12px;padding:40px 36px;max-width:360px;width:90%;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.2);">
       <div style="font-size:52px;margin-bottom:14px;">🚧</div>
@@ -1578,5 +1689,10 @@
       <button onclick="document.getElementById('wipModal').style.display='none'" style="padding:10px 28px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">Got it</button>
     </div>
   </div>
+  <script>
+    document.getElementById('wipModal').addEventListener('click', function(e) {
+      if (e.target === this) this.style.display = 'none';
+    });
+  </script>
 </body>
 </html>

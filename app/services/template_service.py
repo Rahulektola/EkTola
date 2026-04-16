@@ -301,6 +301,7 @@ class TemplateService:
                 except Exception as e:
                     logger.error(f"Error processing template {template_name}: {e}")
                     errors.append({"template": template_name, "error": str(e)})
+                    self.db.rollback()
             
             self.db.commit()
             

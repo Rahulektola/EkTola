@@ -159,7 +159,8 @@ def get_admin_dashboard(
     messages_30d = db.execute(text("SELECT COUNT(*) FROM messages WHERE created_at >= :date"), {"date": thirty_days_ago}).scalar() or 0
     
     # Overall delivery and read rates - use raw SQL to avoid model column issues
-    overall_delivered = db.execute(text("SELECT COUNT(*) FROM messages WHERE status = 'DELIVERED'")).scalar() or 0
+    # NOTE: READ messages were also delivered, so delivered = DELIVERED + READ
+    overall_delivered = db.execute(text("SELECT COUNT(*) FROM messages WHERE status IN ('DELIVERED', 'READ')")).scalar() or 0
     overall_read = db.execute(text("SELECT COUNT(*) FROM messages WHERE status = 'READ'")).scalar() or 0
     overall_delivery_rate = (overall_delivered / total_messages * 100) if total_messages > 0 else 0
     overall_read_rate = (overall_read / overall_delivered * 100) if overall_delivered > 0 else 0
@@ -194,7 +195,7 @@ def get_admin_dashboard(
                 jeweller_id,
                 COUNT(*) AS message_count,
                 SUM(CASE WHEN created_at >= :thirty_days_ago THEN 1 ELSE 0 END) AS messages_30d,
-                SUM(CASE WHEN status = 'DELIVERED' THEN 1 ELSE 0 END) AS delivered_count,
+                SUM(CASE WHEN status IN ('DELIVERED', 'READ') THEN 1 ELSE 0 END) AS delivered_count,
                 SUM(CASE WHEN status = 'READ' THEN 1 ELSE 0 END) AS read_count,
                 MAX(created_at) AS last_message_time
             FROM messages

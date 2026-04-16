@@ -962,6 +962,7 @@
         <button class="profile-icon-btn" id="mobileProfileIconBtn" aria-label="Account menu">👤</button>
         <div class="profile-dropdown-menu" id="profileDropdownMenu">
           <a href="/profile.html">👤 Profile</a>
+          <button id="installAppBtn">📲 Install App</button>
           <button class="danger" id="mobileLogoutBtn">🚪 Logout</button>
         </div>
       </div>
@@ -1271,7 +1272,44 @@
   <script type="module" src="/src/pages/dashboard.ts"></script>
   <script type="module" src="/src/pages/whatsapp-connect.ts"></script>
   <script>
+    // PWA Install prompt
+    var deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', function(e) {
+      e.preventDefault();
+      deferredPrompt = e;
+      var btn = document.getElementById('installAppBtn');
+      if (btn) btn.style.display = '';
+    });
+
+    window.addEventListener('appinstalled', function() {
+      deferredPrompt = null;
+      var btn = document.getElementById('installAppBtn');
+      if (btn) btn.style.display = 'none';
+    });
+
     document.addEventListener('DOMContentLoaded', function() {
+      // Install app handler
+      var installBtn = document.getElementById('installAppBtn');
+      if (installBtn) {
+        installBtn.addEventListener('click', function() {
+          if (deferredPrompt) {
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then(function() {
+              deferredPrompt = null;
+              installBtn.style.display = 'none';
+            });
+          } else if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+            alert('To install ekTola:\n\n1. Tap the Share button (\ud83d\udce4) at the bottom of Safari\n2. Scroll down and tap "Add to Home Screen"\n3. Tap "Add"');
+          }
+        });
+      }
+
+      // iOS Safari: no beforeinstallprompt, show button with manual instructions
+      if (/iPhone|iPad|iPod/.test(navigator.userAgent) && !window.matchMedia('(display-mode: standalone)').matches) {
+        var iosBtn = document.getElementById('installAppBtn');
+        if (iosBtn) iosBtn.style.display = '';
+      }
+
       // Templates button navigates to the templates page
       var templatesBtn = document.getElementById('navTemplatesBtn');
       if (templatesBtn) templatesBtn.addEventListener('click', function() {

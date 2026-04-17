@@ -234,7 +234,7 @@ def delete_template_admin(
     current_admin = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Admin: Delete template (soft delete - mark as inactive)"""
+    """Admin: Hard-delete template and its translations from the database."""
     template = db.query(Template).filter(Template.id == template_id).first()
     
     if not template:
@@ -243,8 +243,7 @@ def delete_template_admin(
             detail="Template not found"
         )
     
-    template.is_active = False
-    template.updated_at = now_utc()
+    db.delete(template)  # cascade="all, delete-orphan" removes translations
     db.commit()
     
     return None

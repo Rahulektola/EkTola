@@ -244,7 +244,6 @@ class TemplateService:
             Dict with sync results (created, updated, skipped counts)
         """
         created_count = 0
-        updated_count = 0
         skipped_count = 0
         errors = []
         
@@ -257,11 +256,17 @@ class TemplateService:
                 return {
                     "success": True,
                     "created": 0,
-                    "updated": 0,
                     "skipped": 0,
                     "message": "No templates found in WhatsApp account"
                 }
             
+            # Wipe all existing templates (cascade deletes translations)
+            old_count = self.db.query(Template).count()
+            self.db.query(TemplateTranslation).delete()
+            self.db.query(Template).delete()
+            self.db.flush()
+            logger.info(f"Cleared {old_count} existing templates before sync")
+
             for wa_template in wa_templates:
                 template_name = wa_template.get("name")
                 wa_language_raw = wa_template.get("language")
@@ -277,110 +282,69 @@ class TemplateService:
                     continue
 
                 try:
-                    # Check if template exists in database
-                    existing = self.db.query(Template).filter(
-                        Template.template_name == template_name
-                    ).first()
+                    body_text, header_text, footer_text, header_var_names, body_var_names = self._extract_component_texts(
+                        wa_template.get("components", [])
+                    )
+
+                    # Determine campaign_type from WhatsApp category
+                    campaign_type = CampaignType.MARKETING if wa_category == "MARKETING" else CampaignType.UTILITY
+
+                    # Combine header and body variable names
+                    all_var_names = []
                     
-                    if existing:
-                        # Update or add translation
-                        matched = False
-                        for translation in existing.translations:
-                            if translation.language == local_lang:
-                                translation.whatsapp_template_id = wa_id
-                                translation.approval_status = wa_status
-                                translation.updated_at = datetime.utcnow()
-                                matched = True
-                                updated_count += 1
-                                break
-                        if not matched:
-                            # Language translation doesn't exist locally — create it
-                            body_text, header_text, footer_text, header_var_names, body_var_names = self._extract_component_texts(
-                                wa_template.get("components", [])
-                            )
-                            new_trans = TemplateTranslation(
-                                template_id=existing.id,
-                                language=local_lang,
-                                body_text=body_text or template_name,
-                                header_text=header_text,
-                                footer_text=footer_text,
-                                whatsapp_template_id=wa_id,
-                                approval_status=wa_status,
-                            )
-                            self.db.add(new_trans)
-                            updated_count += 1
-                    else:
-                        # Template doesn't exist locally — create it from WhatsApp data
-                        body_text, header_text, footer_text, header_var_names, body_var_names = self._extract_component_texts(
-                            wa_template.get("components", [])
-                        )
+                    for idx, var_name in enumerate(header_var_names, 1):
+                        if var_name.isdigit():
+                            all_var_names.append(f"header_param_{idx}")
+                        else:
+                            all_var_names.append(var_name)
+                    
+                    for idx, var_name in enumerate(body_var_names, 1):
+                        if var_name.isdigit():
+                            all_var_names.append(f"body_param_{idx}")
+                        else:
+                            all_var_names.append(var_name)
+                    
+                    variable_count = len(all_var_names)
+                    variable_names_csv = ",".join(all_var_names) if all_var_names else None
 
-                        # Determine campaign_type from WhatsApp category
-                        campaign_type = CampaignType.MARKETING if wa_category == "MARKETING" else CampaignType.UTILITY
+                    display_name = template_name.replace("_", " ").title()
 
-                        # Combine header and body variable names
-                        all_var_names = []
-                        
-                        # Process header variables
-                        for idx, var_name in enumerate(header_var_names, 1):
-                            # If it's a numeric placeholder, generate descriptive name
-                            if var_name.isdigit():
-                                all_var_names.append(f"header_param_{idx}")
-                            else:
-                                # It's a named placeholder, preserve the name
-                                all_var_names.append(var_name)
-                        
-                        # Process body variables
-                        for idx, var_name in enumerate(body_var_names, 1):
-                            # If it's a numeric placeholder, generate descriptive name
-                            if var_name.isdigit():
-                                all_var_names.append(f"body_param_{idx}")
-                            else:
-                                # It's a named placeholder, preserve the name
-                                all_var_names.append(var_name)
-                        
-                        variable_count = len(all_var_names)
-                        variable_names_csv = ",".join(all_var_names) if all_var_names else None
+                    new_template = Template(
+                        template_name=template_name,
+                        display_name=display_name,
+                        campaign_type=campaign_type,
+                        category=wa_category,
+                        variable_count=variable_count,
+                        variable_names=variable_names_csv,
+                        is_active=True,
+                    )
+                    self.db.add(new_template)
+                    self.db.flush()
 
-                        # Build display name from template_name
-                        display_name = template_name.replace("_", " ").title()
-
-                        new_template = Template(
-                            template_name=template_name,
-                            display_name=display_name,
-                            campaign_type=campaign_type,
-                            category=wa_category,
-                            variable_count=variable_count,
-                            variable_names=variable_names_csv,
-                            is_active=True,
-                        )
-                        self.db.add(new_template)
-                        self.db.flush()  # Get new_template.id
-
-                        new_trans = TemplateTranslation(
-                            template_id=new_template.id,
-                            language=local_lang,
-                            body_text=body_text or template_name,
-                            header_text=header_text,
-                            footer_text=footer_text,
-                            whatsapp_template_id=wa_id,
-                            approval_status=wa_status,
-                        )
-                        self.db.add(new_trans)
-                        created_count += 1
-                        logger.info(f"Created template {template_name} from WhatsApp ({local_lang.value}, {wa_status})")
+                    new_trans = TemplateTranslation(
+                        template_id=new_template.id,
+                        language=local_lang,
+                        body_text=body_text or template_name,
+                        header_text=header_text,
+                        footer_text=footer_text,
+                        whatsapp_template_id=wa_id,
+                        approval_status=wa_status,
+                    )
+                    self.db.add(new_trans)
+                    created_count += 1
+                    logger.info(f"Created template {template_name} from WhatsApp ({local_lang.value}, {wa_status})")
                     
                 except Exception as e:
                     logger.error(f"Error processing template {template_name}: {e}")
                     errors.append({"template": template_name, "error": str(e)})
                     self.db.rollback()
-            
+
             self.db.commit()
             
             return {
                 "success": True,
                 "created": created_count,
-                "updated": updated_count,
+                "deleted": old_count,
                 "skipped": skipped_count,
                 "errors": errors if errors else None,
             }

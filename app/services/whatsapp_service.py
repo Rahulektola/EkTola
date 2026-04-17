@@ -393,24 +393,37 @@ class WhatsAppService:
 
     @staticmethod
     def _build_template_components(
-        body_params: Optional[List[str]],
-        header_params: Optional[List[Dict[str, str]]],
-        button_params: Optional[List[Dict[str, str]]],
+        body_params,
+        header_params,
+        button_params,
     ) -> list:
-        """Assemble the WhatsApp template components list from the three param groups."""
+        """Assemble the WhatsApp template components list from the three param groups.
+
+        Each param group can be:
+          - a dict  {"param_name": "value"}  → named parameters
+          - a list  ["value1", "value2"]      → positional parameters
+        """
         if isinstance(body_params, str):
             body_params = [body_params]
+
+        def _text_params(params):
+            if isinstance(params, dict):
+                return [
+                    {"type": "text", "parameter_name": name, "text": str(value)}
+                    for name, value in params.items()
+                ]
+            return [{"type": "text", "text": str(p)} for p in params]
 
         components = []
         if header_params:
             components.append({
                 "type": "header",
-                "parameters": [{"type": "text", "text": p} for p in header_params],
+                "parameters": _text_params(header_params),
             })
         if body_params:
             components.append({
                 "type": "body",
-                "parameters": [{"type": "text", "text": p} for p in body_params],
+                "parameters": _text_params(body_params),
             })
         if button_params:
             components.append({
@@ -832,26 +845,48 @@ class WhatsAppService:
             )
 
         try:
-            components = _build_create_template_components(
-                body_text=body_text,
-                header_text=header_text,
-                footer_text=footer_text,
-                buttons=buttons,
+            from pywa.types.templates import (
+                Template as PyWaTemplate,
+                TemplateCategory as PyWaCategory,
+                TemplateLanguage as PyWaLanguage,
+                BodyText,
+                HeaderText,
+                FooterText,
             )
-            result = self._client.create_template(
+
+            # Map category string to PyWa enum
+            category_map = {
+                "UTILITY": PyWaCategory.UTILITY,
+                "MARKETING": PyWaCategory.MARKETING,
+                "AUTHENTICATION": PyWaCategory.AUTHENTICATION,
+            }
+            pywa_category = category_map.get(category.upper(), PyWaCategory.UTILITY)
+
+            # Map language code to PyWa TemplateLanguage enum
+            pywa_language = PyWaLanguage(language)
+
+            # Build PyWa component objects
+            pywa_components = []
+            if header_text:
+                pywa_components.append(HeaderText(text=header_text))
+            pywa_components.append(BodyText(text=body_text))
+            if footer_text:
+                pywa_components.append(FooterText(text=footer_text))
+
+            template_obj = PyWaTemplate(
                 name=name,
-                category=category.upper(),
-                language=language,
-                components=components,
+                category=pywa_category,
+                language=pywa_language,
+                components=pywa_components,
             )
+
+            result = self._client.create_template(template=template_obj)
             logger.info(f"Template created successfully via PyWa: {name}")
             return TemplateResult(
                 success=True,
-                template_id=(
-                    result.get("id") if isinstance(result, dict) else getattr(result, 'id', None)
-                ),
+                template_id=getattr(result, 'id', None),
                 template_name=name,
-                status="PENDING",
+                status=getattr(result, 'status', 'PENDING'),
             )
 
         except httpx.HTTPStatusError as e:

@@ -106,8 +106,8 @@ def _send_manual_reminder(
             phone_number=contact.phone_number,
             template_name=template_name,
             language_code=(contact.preferred_language or Language.ENGLISH).value,
-            header_params=[contact.name or "Customer"],
-            body_params=[jeweller.business_name, today.strftime("%B")],
+            header_params={"customer_name": contact.name or "Customer"},
+            body_params={"jeweller": jeweller.business_name, "month": today.strftime("%B")},
         )
 
         if not response.success:

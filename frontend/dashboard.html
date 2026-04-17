@@ -32,20 +32,28 @@
         });
         
         if (!response.ok) {
-          console.warn('[FB SDK] Could not fetch config, using defaults');
-          loadFBSDK('https://connect.facebook.net/en_US/sdk.js', null, 'v25.0');
+          console.warn('[FB SDK] Could not fetch config, skipping SDK init');
           return;
         }
         
         const config = await response.json();
+        if (!config.appId) {
+          console.error('[FB SDK] Missing appId in backend config, skipping SDK init');
+          return;
+        }
+
         loadFBSDK(config.sdkUrl, config.appId, config.apiVersion);
       } catch (error) {
         console.error('[FB SDK] Error loading config:', error);
-        loadFBSDK('https://connect.facebook.net/en_US/sdk.js', null, 'v25.0');
       }
     })();
     
     function loadFBSDK(sdkUrl, appId, apiVersion) {
+      if (!sdkUrl || !appId) {
+        console.error('[FB SDK] Missing sdkUrl or appId, cannot initialize Facebook SDK');
+        return;
+      }
+
       // Load SDK script
       const script = document.createElement('script');
       script.src = sdkUrl;
@@ -57,12 +65,12 @@
       // Initialize when loaded
       window.fbAsyncInit = function() {
         FB.init({
-          appId: appId || '2416144582179119',
+          appId: appId,
           cookie: true,
           xfbml: true,
           version: apiVersion || 'v25.0'
         });
-        console.log('[FB SDK] Initialized with version', apiVersion);
+        console.log('[FB SDK] Initialized with appId', appId, 'and version', apiVersion);
       };
     }
   </script>

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
-from typing import List, Dict
+from typing import List, Dict, Optional
 from app.database import get_db
 from app.core.dependencies import get_current_admin, get_current_jeweller, get_current_user
 from app.core.datetime_utils import now_utc, now_utc
@@ -11,7 +11,13 @@ from app.schemas.template import (
     TemplatePreviewResponse, TemplateTranslationPreview
 )
 from app.utils.enums import CampaignType
-from app.services.template_service import TemplateService, generate_dummy_values, render_text_with_variables
+from app.services.template_service import (
+    TemplateService,
+    generate_dummy_values,
+    generate_dummy_values_from_text,
+    render_text_with_variables,
+    extract_variable_names_from_text,
+)
 from datetime import datetime
 
 router = APIRouter(prefix="/templates", tags=["Templates"])
@@ -75,7 +81,10 @@ def preview_template_for_jeweller(
             detail="Template not found"
         )
 
-    return _build_preview_response(template)
+    return _build_preview_response(
+        template,
+        jeweller_name=current_jeweller.business_name,
+    )
 
 
 @router.get("/{template_id}", response_model=TemplateResponse)
@@ -373,34 +382,55 @@ def preview_template_for_admin(
 def _build_preview_response(
     template: Template,
     approved_only: bool = True,
+    jeweller_name: Optional[str] = None,
 ) -> TemplatePreviewResponse:
     """
     Build a TemplatePreviewResponse with dummy variable values rendered.
 
-    Header and body components use independent {{1}}, {{2}} numbering,
-    so we split variable_names into header-portion and body-portion based
-    on the actual placeholder count in each component text.
+    For each translation, variables are extracted directly from the template
+    text so that both numbered ({{1}}, {{2}}) and named ({{customer}})
+    placeholders are handled correctly — even when DB variable_names is empty.
 
     Args:
         template: The Template ORM object.
         approved_only: If True, only include APPROVED translations.
+        jeweller_name: Optional jeweller business name for personalised previews.
     """
     import re
 
-    dummy_values = generate_dummy_values(template.variable_names)
+    # DB-level variable names (may be empty for older templates)
     all_var_names = [
         v.strip() for v in (template.variable_names or "").split(",") if v.strip()
     ]
+    has_db_vars = bool(all_var_names)
 
     translation_previews = []
+    all_dummy_values: Dict[str, str] = {}
+
     for trans in template.translations:
         if approved_only and trans.approval_status != "APPROVED":
             continue
 
-        # Count placeholders per component to split variable names correctly
-        header_var_count = len(re.findall(r'\{\{\d+\}\}', trans.header_text or ""))
-        header_var_names = all_var_names[:header_var_count]
-        body_var_names = all_var_names[header_var_count:]
+        if has_db_vars:
+            # Split DB variable names into header/body portions
+            header_numeric_count = len(re.findall(r'\{\{\d+\}\}', trans.header_text or ""))
+            header_var_names = all_var_names[:header_numeric_count]
+            body_var_names = all_var_names[header_numeric_count:]
+            dummy_values = generate_dummy_values(
+                template.variable_names, jeweller_name=jeweller_name
+            )
+        else:
+            # Fallback: extract variables directly from the translation text
+            header_var_names, body_var_names, dummy_values = (
+                generate_dummy_values_from_text(
+                    trans.header_text,
+                    trans.body_text,
+                    trans.footer_text,
+                    jeweller_name=jeweller_name,
+                )
+            )
+
+        all_dummy_values.update(dummy_values)
 
         translation_previews.append(
             TemplateTranslationPreview(
@@ -423,6 +453,10 @@ def _build_preview_response(
             )
         )
 
+    # If we had no DB vars, generate a top-level dummy_values from the first translation
+    if not has_db_vars and not all_dummy_values:
+        all_dummy_values = {}
+
     return TemplatePreviewResponse(
         id=template.id,
         template_name=template.template_name,
@@ -433,6 +467,6 @@ def _build_preview_response(
         category=template.category,
         variable_count=template.variable_count,
         variable_names=template.variable_names,
-        dummy_values=dummy_values,
+        dummy_values=all_dummy_values,
         translations=translation_previews,
     )

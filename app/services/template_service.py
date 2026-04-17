@@ -73,29 +73,38 @@ _DUMMY_VALUE_MAP: Dict[str, str] = {
 
 def extract_variable_names_from_text(text: Optional[str]) -> List[str]:
     """
-    Extract variable names from template text containing {{variable}} placeholders.
+    Extract unique variable names from template text containing {{variable}} placeholders.
     Supports both numeric ({{1}}, {{2}}) and named ({{customer}}, {{amount}}) placeholders.
 
     Args:
         text: Template text with {{...}} placeholders
 
     Returns:
-        List of variable names in order of appearance
+        Deduplicated list of variable names in order of first appearance
     """
     if not text:
         return []
 
-    # Find all {{...}} patterns
-    matches = re.findall(r'\{\{(\w+)\}\}', text)
-    return matches
+    # Find all {{...}} patterns and deduplicate preserving order
+    seen: set = set()
+    result: List[str] = []
+    for m in re.findall(r'\{\{(\w+)\}\}', text):
+        if m not in seen:
+            seen.add(m)
+            result.append(m)
+    return result
 
 
-def generate_dummy_values(variable_names_csv: Optional[str]) -> Dict[str, str]:
+def generate_dummy_values(
+    variable_names_csv: Optional[str],
+    jeweller_name: Optional[str] = None,
+) -> Dict[str, str]:
     """
     Generate dummy values for template variables based on variable names.
 
     Args:
         variable_names_csv: Comma-separated variable names (e.g. "customer_name,amount")
+        jeweller_name: Optional jeweller business name to use for jeweller-related variables.
 
     Returns:
         Dict mapping each variable name to a human-readable dummy value.
@@ -103,14 +112,77 @@ def generate_dummy_values(variable_names_csv: Optional[str]) -> Dict[str, str]:
     if not variable_names_csv:
         return {}
 
+    # Variables that should show the jeweller's actual business name
+    _JEWELLER_KEYS = {
+        "jeweller", "jeweller_name", "shop_name", "business_name",
+        "body_param_1", "header_param_1",
+    }
+
     result: Dict[str, str] = {}
     for var_name in variable_names_csv.split(","):
         var_name = var_name.strip()
         if not var_name:
             continue
-        result[var_name] = _DUMMY_VALUE_MAP.get(var_name.lower(), f"Sample_{var_name}")
+        # Use actual jeweller name when available for jeweller-related variables
+        if jeweller_name and var_name.lower() in _JEWELLER_KEYS:
+            result[var_name] = jeweller_name
+        else:
+            result[var_name] = _DUMMY_VALUE_MAP.get(var_name.lower(), f"Sample_{var_name}")
 
     return result
+
+
+def generate_dummy_values_from_text(
+    header_text: Optional[str],
+    body_text: Optional[str],
+    footer_text: Optional[str],
+    jeweller_name: Optional[str] = None,
+) -> tuple:
+    """
+    Extract variables directly from template text and generate dummy values.
+    Used as fallback when DB variable_names is empty.
+
+    For numeric placeholders ({{1}}, {{2}}), maps them to descriptive names
+    (header_param_1, body_param_1) for better dummy value lookup while keeping
+    the original numeric keys for placeholder matching.
+
+    Returns:
+        (header_var_names, body_var_names, dummy_values)
+    """
+    header_vars = extract_variable_names_from_text(header_text)
+    body_vars = extract_variable_names_from_text(body_text)
+    footer_vars = extract_variable_names_from_text(footer_text)
+
+    # Variables that should use the jeweller's business name
+    _JEWELLER_KEYS = {
+        "jeweller", "jeweller_name", "shop_name", "business_name",
+        "body_param_1", "header_param_1",
+    }
+
+    # Build dummy values, using descriptive lookup names for numeric variables
+    dummy_values: Dict[str, str] = {}
+
+    def _add_vars(var_list: List[str], prefix: str) -> None:
+        for idx, var_name in enumerate(var_list, 1):
+            if var_name in dummy_values:
+                continue
+            if var_name.isdigit():
+                # Numeric placeholder → use descriptive name for lookup
+                lookup = f"{prefix}_param_{idx}"
+            else:
+                lookup = var_name
+            if jeweller_name and lookup.lower() in _JEWELLER_KEYS:
+                dummy_values[var_name] = jeweller_name
+            else:
+                dummy_values[var_name] = _DUMMY_VALUE_MAP.get(
+                    lookup.lower(), _DUMMY_VALUE_MAP.get(var_name.lower(), f"Sample_{var_name}")
+                )
+
+    _add_vars(header_vars, "header")
+    _add_vars(body_vars, "body")
+    _add_vars(footer_vars, "footer")
+
+    return header_vars, body_vars, dummy_values
 
 
 def render_text_with_variables(

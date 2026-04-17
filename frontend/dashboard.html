@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#6366f1">
   <title>Dashboard - ekTola Jeweller</title>
   
@@ -81,6 +81,8 @@
       --border-color: #e5e7eb;
       --bg-light: #f9fafb;
     }
+
+    html { overflow-x: hidden; }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -750,9 +752,151 @@
       }
     }
 
+    /* Mobile footer bar */
+    .mobile-footer-bar {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: calc(62px + env(safe-area-inset-bottom, 0px));
+      background: var(--primary-color, #6366f1);
+      border-top: none;
+      align-items: flex-start;
+      justify-content: space-around;
+      z-index: 999;
+      padding: 0 4px;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      box-shadow: 0 -2px 16px rgba(99, 102, 241, 0.35);
+      box-sizing: border-box;
+    }
+
+    .footer-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 6px 4px;
+      border-radius: 10px;
+      color: rgba(255, 255, 255, 0.7);
+      transition: background 0.15s, color 0.15s;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .footer-btn:hover,
+    .footer-btn:active {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+    }
+
+    .footer-btn .footer-icon {
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .footer-btn .footer-label {
+      font-size: 10px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+
+    .footer-btn.active {
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+    }
+
+    .footer-btn.active .footer-icon,
+    .footer-btn.active .footer-label {
+      color: #fff;
+    }
+
+    /* Mobile profile icon dropdown */
+    .nav-actions-mobile {
+      display: none;
+      position: relative;
+    }
+
+    .profile-icon-btn {
+      background: white;
+      border: 1px solid var(--border-color);
+      border-radius: 50%;
+      width: 38px;
+      height: 38px;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+
+    .profile-icon-btn:hover {
+      background: var(--bg-light);
+    }
+
+    .profile-dropdown-menu {
+      display: none;
+      position: absolute;
+      right: 0;
+      top: calc(100% + 6px);
+      background: white;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      min-width: 150px;
+      z-index: 1000;
+      overflow: hidden;
+    }
+
+    .profile-dropdown-menu.open {
+      display: block;
+    }
+
+    .profile-dropdown-menu a,
+    .profile-dropdown-menu button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 12px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-color);
+      background: none;
+      border: none;
+      text-decoration: none;
+      cursor: pointer;
+      box-sizing: border-box;
+    }
+
+    .profile-dropdown-menu a:hover,
+    .profile-dropdown-menu button:hover {
+      background: var(--bg-light);
+    }
+
+    .profile-dropdown-menu button.danger {
+      color: #dc2626;
+    }
+
     @media (max-width: 768px) {
       .nav-links {
         display: none;
+      }
+
+      .nav-actions {
+        display: none;
+      }
+
+      .nav-actions-mobile {
+        display: flex;
       }
 
       .dashboard-header {
@@ -771,6 +915,14 @@
 
       .quick-actions {
         grid-template-columns: 1fr;
+      }
+
+      .dashboard-container {
+        padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+      }
+
+      .mobile-footer-bar {
+        display: flex;
       }
     }
   </style>
@@ -803,6 +955,16 @@
         <button class="btn btn-secondary" id="logoutBtn">
           🚪 Logout
         </button>
+      </div>
+
+      <!-- Mobile: profile icon with dropdown -->
+      <div class="nav-actions-mobile">
+        <button class="profile-icon-btn" id="mobileProfileIconBtn" aria-label="Account menu">👤</button>
+        <div class="profile-dropdown-menu" id="profileDropdownMenu">
+          <a href="/profile.html">👤 Profile</a>
+          <button id="installAppBtn">📲 Install App</button>
+          <button class="danger" id="mobileLogoutBtn">🚪 Logout</button>
+        </div>
       </div>
     </div>
   </nav>
@@ -869,7 +1031,7 @@
     </div>
 
     <!-- WhatsApp Connection Status -->
-    <div class="card" style="margin-bottom: 24px; border: 2px solid #25D366;">
+    <div id="section-whatsapp" class="card" style="margin-bottom: 24px; border: 2px solid #25D366;">
       <div class="card-header" style="background: linear-gradient(135deg, #25D366 0%, #128C7E 100%); color: white; border-radius: 12px 12px 0 0;">
         <h2 class="card-title" style="color: white;"><img src="/whatsapp-logo.png" alt="WhatsApp" width="24" height="24" style="vertical-align: middle; margin-right: 8px; border-radius: 4px;"> WhatsApp Business Connection</h2>
       </div>
@@ -947,7 +1109,7 @@
     </div>
 
     <!-- Upload Options -->
-    <div class="card">
+    <div id="section-upload" class="card">
       <div class="card-header">
         <h2 class="card-title">📥 Upload Contacts (3 Ways)</h2>
       </div>
@@ -1087,11 +1249,67 @@
     </div>
   </div>
 
-  <!-- Load Vite TypeScript modules -->
+  <!-- Mobile Footer Navigation Bar -->
+  <div class="mobile-footer-bar" id="mobileFooterBar">
+    <button class="footer-btn active" id="footerHomeBtn">
+      <span class="footer-icon">🏠</span>
+      <span class="footer-label">Home</span>
+    </button>
+    <button class="footer-btn" id="footerContactsBtn">
+      <span class="footer-icon">👥</span>
+      <span class="footer-label">Contacts</span>
+    </button>
+    <button class="footer-btn" id="footerTemplatesBtn">
+      <span class="footer-icon">📋</span>
+      <span class="footer-label">Templates</span>
+    </button>
+    <button class="footer-btn" id="footerCampaignsBtn">
+      <span class="footer-icon">📣</span>
+      <span class="footer-label">Campaigns</span>
+    </button>
+  </div>
+
   <script type="module" src="/src/pages/dashboard.ts"></script>
   <script type="module" src="/src/pages/whatsapp-connect.ts"></script>
   <script>
+    // PWA Install prompt
+    var deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', function(e) {
+      e.preventDefault();
+      deferredPrompt = e;
+      var btn = document.getElementById('installAppBtn');
+      if (btn) btn.style.display = '';
+    });
+
+    window.addEventListener('appinstalled', function() {
+      deferredPrompt = null;
+      var btn = document.getElementById('installAppBtn');
+      if (btn) btn.style.display = 'none';
+    });
+
     document.addEventListener('DOMContentLoaded', function() {
+      // Install app handler
+      var installBtn = document.getElementById('installAppBtn');
+      if (installBtn) {
+        installBtn.addEventListener('click', function() {
+          if (deferredPrompt) {
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then(function() {
+              deferredPrompt = null;
+              installBtn.style.display = 'none';
+            });
+          } else if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+            alert('To install ekTola:\n\n1. Tap the Share button (\ud83d\udce4) at the bottom of Safari\n2. Scroll down and tap "Add to Home Screen"\n3. Tap "Add"');
+          }
+        });
+      }
+
+      // iOS Safari: no beforeinstallprompt, show button with manual instructions
+      if (/iPhone|iPad|iPod/.test(navigator.userAgent) && !window.matchMedia('(display-mode: standalone)').matches) {
+        var iosBtn = document.getElementById('installAppBtn');
+        if (iosBtn) iosBtn.style.display = '';
+      }
+
       // Templates button navigates to the templates page
       var templatesBtn = document.getElementById('navTemplatesBtn');
       if (templatesBtn) templatesBtn.addEventListener('click', function() {
@@ -1106,6 +1324,20 @@
       });
       document.getElementById('wipModal').addEventListener('click', function(e) {
         if (e.target === this) this.style.display = 'none';
+      });
+
+      // Mobile footer nav handlers
+      document.getElementById('footerHomeBtn').addEventListener('click', function() {
+        window.location.href = '/dashboard.html';
+      });
+      document.getElementById('footerContactsBtn').addEventListener('click', function() {
+        window.location.href = '/contacts.html';
+      });
+      document.getElementById('footerTemplatesBtn').addEventListener('click', function() {
+        window.location.href = '/templates.html';
+      });
+      document.getElementById('footerCampaignsBtn').addEventListener('click', function() {
+        document.getElementById('wipModal').style.display = 'flex';
       });
     });
   </script>

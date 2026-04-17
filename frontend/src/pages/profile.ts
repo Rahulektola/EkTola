@@ -90,7 +90,6 @@ function setText(id: string, value: string | null | undefined, fallback = '—')
  */
 function renderProfile(profile: JewellerProfile): void {
   setText('businessName', profile.business_name);
-  setText('ownerName', profile.owner_name);
   setText('phoneNumber', profile.phone_number);
   setText('email', profile.email);
   setText('memberSince', formatDate(profile.created_at));
